@@ -245,7 +245,7 @@ public enum AgentAttribution {
         }
         if marker.name == "Claude Code" {
             owner.sessionKey = environment[AgentSignatures.claudeSessionIdKey]
-            if let session = environment[AgentSignatures.claudeSessionKey].flatMap(Int.init) {
+            if let session = AgentSignatures.claudeSessionPid(in: environment) {
                 if isAgentProcess(session, named: marker.name, in: processes) {
                     owner.sessionPid = session
                 } else {
@@ -293,7 +293,7 @@ public enum AgentAttribution {
             owner.sessionPid = fromTree.sessionPid
             return
         }
-        if let session = environment[AgentSignatures.claudeSessionKey].flatMap(Int.init), isAgentProcess(session, named: "Claude Code", in: processes) {
+        if let session = AgentSignatures.claudeSessionPid(in: environment), isAgentProcess(session, named: "Claude Code", in: processes) {
             owner.sessionPid = session
         }
     }

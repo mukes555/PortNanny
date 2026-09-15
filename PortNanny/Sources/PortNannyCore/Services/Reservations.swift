@@ -57,8 +57,11 @@ public struct Reservation: Codable, Equatable, Identifiable {
     /// A lease pinned to a process that has exited is over, whatever its
     /// clock says; `exec` leases carry exec's own pid for exactly this.
     public func isOrphaned() -> Bool {
-        guard let pid = sessionPid else { return false }
-        return kill(pid_t(pid), 0) != 0 && errno == ESRCH
+        // The store is shared with every process this user runs, so a pid read
+        // back from it is untrusted; one no process can have is not orphaned,
+        // it is simply not a pid, and narrowing it used to trap.
+        guard let pid = sessionPid, pid > 0, let kernelPid = pid_t(exactly: pid) else { return false }
+        return kill(kernelPid, 0) != 0 && errno == ESRCH
     }
 
     /// "until 12:30 (8m left)"
@@ -124,11 +127,11 @@ public final class ReservationStore {
     /// Every portnanny process that touches the same domain takes the same
     /// advisory lock around its read-modify-write, so two agents leasing at
     /// the same instant cannot both win a port or lose each other's leases.
-    private let lockPath: String
+    private let lock: SharedStore.Lock
 
     public init(defaults: UserDefaults, lockName: String = UUID().uuidString) {
         self.defaults = defaults
-        self.lockPath = (NSTemporaryDirectory() as NSString).appendingPathComponent("portnanny-\(lockName).lock")
+        self.lock = SharedStore.Lock(name: lockName)
     }
 
     public static func appStore() -> ReservationStore {
@@ -161,14 +164,7 @@ public final class ReservationStore {
     }
 
     private func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        let descriptor = open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC, 0o600)
-        guard descriptor >= 0 else { return try body() }
-        flock(descriptor, LOCK_EX)
-        defer {
-            flock(descriptor, LOCK_UN)
-            close(descriptor)
-        }
-        return try body()
+        try lock.withLock(body)
     }
 
     public func reservation(for port: Int, now: Date = Date()) -> Reservation? {
@@ -219,9 +215,8 @@ public final class ReservationStore {
     }
 
     private func load() -> [Reservation] {
-        guard let data = defaults.data(forKey: DefaultsKey.reservations),
-              let items = try? JSONDecoder().decode([Reservation].self, from: data) else { return [] }
-        return items
+        guard let data = defaults.data(forKey: DefaultsKey.reservations) else { return [] }
+        return SharedStore.decodeArray(Reservation.self, from: data) ?? []
     }
 
     private func save(_ reservations: [Reservation]) {

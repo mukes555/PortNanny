@@ -77,6 +77,9 @@ public final class HistoryManager: ObservableObject {
     /// Refusals the guard issued to agents, newest first, capped at twenty.
     @Published public private(set) var refusals: [PortHistoryItem] = []
     private let defaults: UserDefaults
+    /// The app and every CLI and MCP process append to this store; without a
+    /// shared lock, fifteen agents refused at once kept only twelve refusals.
+    private let lock: SharedStore.Lock
     private static let maxRefusals = 20
 
     /// Kills and refusals together, newest first.
@@ -89,28 +92,37 @@ public final class HistoryManager: ObservableObject {
         didSet { trimAndSave() }
     }
 
-    public init(defaults: UserDefaults = .standard) {
+    /// `lockName` defaults to the shared domain, so the app's `.shared` store
+    /// and the CLI's `appStore()`, which reach the same plist by different
+    /// routes, take the same lock.
+    public init(defaults: UserDefaults = .standard, lockName: String = HistoryManager.appSuiteName) {
         self.defaults = defaults
+        self.lock = SharedStore.Lock(name: "\(lockName)-history")
         loadHistory()
     }
 
     public func addEntry(port: Int, processName: String, action: PortHistoryItem.HistoryAction,
                   owner: String? = nil, killedBy: String? = nil) {
-        // The CLI and the app share this store; re-read before writing so
-        // neither clobbers what the other appended.
-        loadHistory()
-        let item = PortHistoryItem(port: port, processName: processName, action: action, owner: owner, killedBy: killedBy)
-        history.insert(item, at: 0)
-        trimAndSave()
+        // The CLI and the app share this store. Re-reading before writing only
+        // helps if nobody else writes between the read and the write, which
+        // is what the lock is for.
+        lock.withLock {
+            loadHistory()
+            let item = PortHistoryItem(port: port, processName: processName, action: action, owner: owner, killedBy: killedBy)
+            history.insert(item, at: 0)
+            trimAndSave()
+        }
     }
 
     public func addRefusal(port: Int, processName: String, owner: String?, refused caller: String) {
-        loadHistory()
-        let item = PortHistoryItem(port: port, processName: processName, action: .refused, owner: owner, killedBy: caller)
-        refusals.insert(item, at: 0)
-        refusals = Array(refusals.prefix(Self.maxRefusals))
-        if let data = try? JSONEncoder().encode(refusals) {
-            defaults.set(data, forKey: DefaultsKey.refusals)
+        lock.withLock {
+            loadHistory()
+            let item = PortHistoryItem(port: port, processName: processName, action: .refused, owner: owner, killedBy: caller)
+            refusals.insert(item, at: 0)
+            refusals = Array(refusals.prefix(Self.maxRefusals))
+            if let data = try? JSONEncoder().encode(refusals) {
+                defaults.set(data, forKey: DefaultsKey.refusals)
+            }
         }
     }
 
@@ -146,20 +158,25 @@ public final class HistoryManager: ObservableObject {
     }
 
     private func loadHistory() {
+        // Entries that no longer decode are dropped one by one rather than
+        // taking the whole list with them, which the next save would then
+        // have written over every good entry.
         if let data = defaults.data(forKey: DefaultsKey.history),
-           let items = try? JSONDecoder().decode([PortHistoryItem].self, from: data) {
+           let items = SharedStore.decodeArray(PortHistoryItem.self, from: data) {
             history = items
         }
         if let data = defaults.data(forKey: DefaultsKey.refusals),
-           let items = try? JSONDecoder().decode([PortHistoryItem].self, from: data) {
+           let items = SharedStore.decodeArray(PortHistoryItem.self, from: data) {
             refusals = items
         }
     }
 
     public func clearHistory() {
-        history.removeAll()
-        refusals.removeAll()
-        defaults.removeObject(forKey: DefaultsKey.history)
-        defaults.removeObject(forKey: DefaultsKey.refusals)
+        lock.withLock {
+            history.removeAll()
+            refusals.removeAll()
+            defaults.removeObject(forKey: DefaultsKey.history)
+            defaults.removeObject(forKey: DefaultsKey.refusals)
+        }
     }
 }

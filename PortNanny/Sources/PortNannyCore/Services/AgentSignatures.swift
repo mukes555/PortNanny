@@ -88,6 +88,15 @@ public enum AgentSignatures {
         environment[declaredOwnerKey] ?? environment[legacyDeclaredOwnerKey]
     }
 
+    /// CLAUDE_PID, when it names something that could be a process. Any
+    /// process can set this variable to anything, and a value past what a
+    /// 32-bit pid holds used to trap the moment it reached the kernel.
+    public static func claudeSessionPid(in environment: [String: String]) -> Int? {
+        guard let raw = environment[claudeSessionKey], let pid = Int(raw) else { return nil }
+        let couldBeAProcess = pid > 0 && pid_t(exactly: pid) != nil
+        return couldBeAProcess ? pid : nil
+    }
+
     public static func declaredSession(in environment: [String: String]) -> String? {
         environment[declaredSessionKey] ?? environment[legacyDeclaredSessionKey]
     }

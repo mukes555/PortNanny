@@ -44,6 +44,12 @@ public final class MCPServer {
 
         if method.hasPrefix("notifications/") { return nil }
         guard let id else { return nil }
+        // JSON-RPC ids are strings, numbers, or null. Echoing anything else
+        // back, such as the -Infinity that `-1e999` parses to, raised an
+        // exception Swift cannot catch and took the whole server down.
+        guard Self.isValidRequestID(id) else {
+            return fail(NSNull(), code: -32600, message: "invalid request: id must be a string, a finite number, or null")
+        }
 
         switch method {
         case "initialize":
@@ -243,11 +249,25 @@ public final class MCPServer {
         encode(["jsonrpc": "2.0", "id": id, "error": ["code": code, "message": message]])
     }
 
+    /// `JSONSerialization.data(withJSONObject:)` raises an Objective-C
+    /// exception, which `try?` does not catch, for a non-finite number anywhere
+    /// in the object. Checking first keeps a NaN in a tool result, or an
+    /// infinite id, from crashing the server an agent depends on.
     private func encode(_ object: [String: Any]) -> String {
-        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+        let fallback = #"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"could not encode response"}}"#
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
               let text = String(data: data, encoding: .utf8) else {
-            return #"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"could not encode response"}}"#
+            return fallback
         }
         return text
+    }
+
+    static func isValidRequestID(_ id: Any) -> Bool {
+        if id is NSNull || id is String { return true }
+        guard let number = id as? NSNumber else { return false }
+        // NSNumber wraps booleans too, and `true` is not a request id.
+        let isBoolean = CFGetTypeID(number) == CFBooleanGetTypeID()
+        return !isBoolean && number.doubleValue.isFinite
     }
 }
