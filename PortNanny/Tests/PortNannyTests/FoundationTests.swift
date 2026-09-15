@@ -49,11 +49,12 @@ final class FoundationTests: XCTestCase {
     }
 
     func testFirstFreePortPrefersThePreferredThenScans() {
-        let canBind = { (_: Int) in true }
-        _ = canBind
-        XCTAssertEqual(PortNannyCLI.firstFreePort(prefer: 3000, range: 3000...3010, listening: []), 3000)
-        XCTAssertEqual(PortNannyCLI.firstFreePort(prefer: 3000, range: 3000...3010, listening: [3000, 3001]), 3002)
-        XCTAssertNil(PortNannyCLI.firstFreePort(prefer: 3000, range: 3000...3001, listening: [3000, 3001]))
+        // `probe: false` keeps this about the choosing logic. Probing binds real
+        // ports, so the test used to fail whenever the machine running it had a
+        // dev server on 3000, which for this project is most machines.
+        XCTAssertEqual(PortNannyCLI.firstFreePort(prefer: 3000, range: 3000...3010, listening: [], probe: false), 3000)
+        XCTAssertEqual(PortNannyCLI.firstFreePort(prefer: 3000, range: 3000...3010, listening: [3000, 3001], probe: false), 3002)
+        XCTAssertNil(PortNannyCLI.firstFreePort(prefer: 3000, range: 3000...3001, listening: [3000, 3001], probe: false))
     }
 
     func testFreePortArgumentsParse() {

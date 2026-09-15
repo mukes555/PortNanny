@@ -79,12 +79,12 @@ public enum OutputSchemas {
     public static let all: [String: [String: String]] = [
         "list": ["<array>": "PortInfo objects (see fields below)"].merging(port) { a, _ in a },
         "kill": [
-            "schema": "1", "action": "not-found | already-free | no-orphans | would-kill | would-refuse | refused | managed | killed | stopped | still-running | failed",
+            "schema": "1", "action": "not-found | already-free | held-by-unseen | no-orphans | would-kill | would-refuse | refused | managed | killed | stopped | partial | still-running | failed",
             "port": "requested port, absent for --pid and --orphaned", "force": "whether --force was given", "caller": "AgentOwner of the caller, or absent",
             "targets": "[{pid, processName, port, proto, agentOwner, connections, projectPath, managedBy}]", "reasons": "refusal or failure lines",
             "stoppedVia": "supervisors signalled or commands run in place of a plain kill",
             "overriddenRefusals": "refusals --force overrode", "guardVerdict": "refused | allowed | overridden | not-evaluated: … | allowed: caller is not an agent",
-            "exitCode": "0 done, 1 nothing listening, 3 refused, 4 failed, 5 still running, 6 managed (a supervisor would undo it; the stop command is in reasons)",
+            "exitCode": "0 done, 1 nothing listening, 3 refused, 4 failed or only partly killed, 5 still running, 6 managed (a supervisor would undo it; the stop command is in reasons)",
         ],
         "whois": [
             "schema": "1", "port": "requested port, absent for --pid", "pid": "requested pid, absent for a port",

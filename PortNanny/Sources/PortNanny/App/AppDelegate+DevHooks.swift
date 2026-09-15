@@ -51,7 +51,7 @@ extension AppDelegate {
     /// screencapture's top-left origin) when the window server declines.
     private func captureWorkbench(to path: String) {
         guard let window = workbenchWindow, let screen = window.screen ?? NSScreen.main else {
-            FileHandle.standardError.write(Data("no workbench window to capture\n".utf8))
+            try? FileHandle.standardError.write(contentsOf: Data("no workbench window to capture\n".utf8))
             return
         }
         if (try? CommandRunner.run("/usr/sbin/screencapture", ["-x", "-o", "-l", "\(window.windowNumber)", path], timeout: 10)) != nil {
@@ -63,7 +63,7 @@ extension AppDelegate {
         do {
             _ = try CommandRunner.run("/usr/sbin/screencapture", ["-x", "-R", region, path], timeout: 10)
         } catch {
-            FileHandle.standardError.write(Data("screencapture failed by window and by region \(region): \(error)\n".utf8))
+            try? FileHandle.standardError.write(contentsOf: Data("screencapture failed by window and by region \(region): \(error)\n".utf8))
         }
     }
 

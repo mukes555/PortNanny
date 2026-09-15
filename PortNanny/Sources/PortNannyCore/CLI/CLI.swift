@@ -98,8 +98,11 @@ public enum PortNannyCLI {
         return Scan(ports: ports, table: table, caller: caller)
     }
 
+    /// `FileHandle.write(_:)` raises an uncatchable exception when stderr is
+    /// closed, which a parent process is free to do; the throwing variant
+    /// reports it instead, and a message nobody can read is not worth dying for.
     public static func printError(_ text: String) {
-        FileHandle.standardError.write(Data((text + "\n").utf8))
+        try? FileHandle.standardError.write(contentsOf: Data((text + "\n").utf8))
     }
 
     /// False when encoding failed: a JSON consumer must never see exit 0 with
@@ -277,7 +280,7 @@ public enum PortNannyCLI {
     public static func callerIdentity() -> AgentOwner? {
         let callerPid = Int(Foundation.ProcessInfo.processInfo.processIdentifier)
         let environment = Foundation.ProcessInfo.processInfo.environment
-        let sessionPid = environment[AgentSignatures.claudeSessionKey].flatMap(Int.init)
+        let sessionPid = AgentSignatures.claudeSessionPid(in: environment)
         let table = ProcessTable.ancestry(of: callerPid, including: sessionPid.map { [$0] } ?? [])
         return AgentAttribution.callerOwner(callerPid: callerPid, in: table, environment: environment)
     }

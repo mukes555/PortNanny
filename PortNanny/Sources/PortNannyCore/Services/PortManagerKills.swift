@@ -77,14 +77,15 @@ extension PortManager {
         force: Bool,
         killTree: Bool = false,
         errorContext: String,
-        onKilled: @escaping () -> Void,
-        onNotTerminated: (() -> Void)? = nil
+        onKilled: @escaping (ProcessKiller.Outcome) -> Void,
+        onNotTerminated: (() -> Void)? = nil,
+        onFailed: ((String) -> Void)? = nil
     ) {
         terminatingPids.insert(pid)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             do {
-                try self.killer.killProcess(pid: pid, force: force, killTree: killTree, expectedName: expectedName)
+                let outcome = try self.killer.killProcess(pid: pid, force: force, killTree: killTree, expectedName: expectedName)
                 let timeout = Self.exitTimeout(force: force)
                 let died = self.waitForExit(pids: [pid], timeout: timeout).contains(pid)
 
@@ -93,7 +94,7 @@ extension PortManager {
                     self.terminatingPids.remove(pid)
                     if died {
                         self.lastErrorMessage = nil
-                        onKilled()
+                        onKilled(outcome)
                     } else {
                         // Not a failure yet: the signal was delivered and the
                         // process may still be shutting down.
@@ -107,12 +108,17 @@ extension PortManager {
                     self.terminatingPids.remove(pid)
                     self.lastErrorMessage = self.formatError(error, context: errorContext)
                     self.showToast(self.lastErrorMessage ?? "Kill failed")
+                    onFailed?(self.lastErrorMessage ?? "Kill failed")
                 }
             }
         }
     }
 
-    public func killPort(_ portInfo: PortInfo, force: Bool = false, killTree: Bool = false, initiator: KillInitiator = .user) {
+    /// `onProblem` hears about a kill that failed or did not finish. The port
+    /// guard is the one caller that needs it: it runs while nothing is on
+    /// screen, so a toast nobody sees is not a report.
+    public func killPort(_ portInfo: PortInfo, force: Bool = false, killTree: Bool = false, initiator: KillInitiator = .user,
+                         onProblem: ((String) -> Void)? = nil) {
         performSingleKill(
             pid: portInfo.pid,
             expectedName: portInfo.processName,
@@ -120,21 +126,34 @@ extension PortManager {
             force: force,
             killTree: killTree,
             errorContext: "Kill failed for :\(portInfo.port)",
-            onKilled: { [weak self] in
+            onKilled: { [weak self] outcome in
                 guard let self = self else { return }
                 // Optimistically remove for instant feedback; a refresh follows
                 self.activePorts.removeAll { $0.id == portInfo.id }
+                self.scheduleRefresh()
+                // Nothing was signalled: it had already exited (a dialog left
+                // open, a supervisor restart), and History must not record a
+                // kill that never happened.
+                guard outcome.signalled else {
+                    self.showToast(":\(portInfo.port) had already stopped")
+                    return
+                }
+                let survivors = outcome.childrenNotKilled.count
+                if survivors > 0 {
+                    self.lastErrorMessage = "\(survivors) child process\(survivors == 1 ? "" : "es") of \(portInfo.processName) could not be stopped; :\(portInfo.port) may still be busy."
+                }
                 self.showToast("\(killTree ? "Killed Tree" : "Killed") :\(portInfo.port)")
                 self.history.addEntry(
                     port: portInfo.port, processName: portInfo.processName, action: .killed,
                     owner: portInfo.agentOwner?.name, killedBy: initiator.rawValue
                 )
-                self.scheduleRefresh()
             },
             onNotTerminated: { [weak self] in
                 self?.showToast(":\(portInfo.port) still shutting down, will notify when free")
                 self?.pendingFreeNotifications.insert(portInfo.port)
-            }
+                onProblem?("'\(portInfo.processName)' (PID \(portInfo.pid)) has not stopped yet; :\(portInfo.port) is still taken.")
+            },
+            onFailed: { message in onProblem?(message) }
         )
     }
 
@@ -148,6 +167,9 @@ extension PortManager {
     /// asking; returning false cancels.
     public func killPortNumber(_ portNumber: Int, force: Bool = false, respectProtected: Bool = false,
                         initiator: KillInitiator = .user, confirm: ((PortInfo) -> Bool)? = nil) {
+        // Read here, on the main thread: the scan below runs on another one,
+        // and Settings can rewrite this list while it does.
+        let protectedNames = protectedProcessSubstrings
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -161,7 +183,7 @@ extension PortManager {
                 return
             }
 
-            if respectProtected && self.isProtectedProcessName(target.processName) {
+            if respectProtected && Self.isProtected(target.processName, by: protectedNames) {
                 DispatchQueue.main.async {
                     self.showToast(":\(portNumber) is protected, not killed")
                 }
@@ -184,7 +206,9 @@ extension PortManager {
 
     /// Kills an arbitrary process (used for children in the process tree, and
     /// for a reloader together with everything under it).
-    public func killProcess(pid: Int, name: String, force: Bool = false, killTree: Bool = false) {
+    /// `onStopped` runs only when something was actually signalled and it
+    /// exited, so a caller's History entry describes what happened.
+    public func killProcess(pid: Int, name: String, force: Bool = false, killTree: Bool = false, onStopped: (() -> Void)? = nil) {
         performSingleKill(
             pid: pid,
             expectedName: name,
@@ -192,8 +216,9 @@ extension PortManager {
             force: force,
             killTree: killTree,
             errorContext: "Kill failed for \(name)",
-            onKilled: { [weak self] in
-                self?.showToast("Killed \(name)")
+            onKilled: { [weak self] outcome in
+                self?.showToast(outcome.signalled ? "Killed \(name)" : "\(name) had already stopped")
+                if outcome.signalled { onStopped?() }
                 self?.scheduleRefresh(after: 0.5)
             },
             onNotTerminated: { [weak self] in
@@ -209,9 +234,9 @@ extension PortManager {
             subject: testInfo.processName,
             force: force,
             errorContext: "Kill failed for \(testInfo.processName)",
-            onKilled: { [weak self] in
+            onKilled: { [weak self] outcome in
                 self?.activeTests.removeAll { $0.id == testInfo.id }
-                self?.showToast("Killed \(testInfo.processName)")
+                self?.showToast(outcome.signalled ? "Killed \(testInfo.processName)" : "\(testInfo.processName) had already stopped")
             },
             onNotTerminated: { [weak self] in
                 self?.showToast("Kill failed")
@@ -229,14 +254,13 @@ extension PortManager {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            for test in tests {
-                try? self.killer.killProcess(pid: test.pid, force: force, expectedName: test.processName)
-            }
+            let failures = tests.compactMap { test in self.failureKilling(pid: test.pid, name: test.processName, force: force) }
 
             let dead = self.waitForExit(pids: tests.map { $0.pid }, timeout: Self.exitTimeout(force: force))
 
             DispatchQueue.main.async {
                 self.activeTests.removeAll { dead.contains($0.pid) }
+                self.report(failures)
                 let stillRunning = tests.count - dead.count
                 if stillRunning > 0 {
                     self.showToast("Killed \(dead.count), \(stillRunning) still shutting down")
@@ -263,9 +287,7 @@ extension PortManager {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            for target in targets {
-                try? self.killer.killProcess(pid: target.pid, force: force, expectedName: target.processName)
-            }
+            let failures = targets.compactMap { self.failureKilling(pid: $0.pid, name: $0.processName, force: force) }
 
             let deadPids = self.waitForExit(pids: targets.map { $0.pid }, timeout: Self.exitTimeout(force: force))
             let successCount = deadPids.count
@@ -275,6 +297,9 @@ extension PortManager {
                 if successCount > 0 {
                     self.activePorts.removeAll { deadPids.contains($0.pid) }
                     self.lastErrorMessage = nil
+                    // "Killed 4 processes" said nothing about the fifth, whose
+                    // error used to be dropped on the floor.
+                    self.report(failures)
 
                     let stillRunning = targets.count - successCount
                     if stillRunning > 0 {
@@ -290,8 +315,8 @@ extension PortManager {
                         )
                     }
                 } else {
-                    self.lastErrorMessage = "Kill failed"
-                    self.showToast("Kill failed")
+                    self.lastErrorMessage = failures.first ?? "Kill failed"
+                    self.showToast(self.lastErrorMessage ?? "Kill failed")
                 }
 
                 self.scheduleRefresh()
@@ -299,6 +324,26 @@ extension PortManager {
         }
     }
 
+
+    /// Signals one process, answering with why it could not be, if it could
+    /// not. Bulk kills used to discard that reason entirely.
+    private func failureKilling(pid: Int, name: String, force: Bool) -> String? {
+        do {
+            let outcome = try killer.killProcess(pid: pid, force: force, expectedName: name)
+            let survivors = outcome.childrenNotKilled.count
+            return survivors > 0 ? "\(survivors) child process\(survivors == 1 ? "" : "es") of \(name) could not be stopped" : nil
+        } catch {
+            return formatError(error, context: "Kill failed for \(name)")
+        }
+    }
+
+    /// Shows the first thing that went wrong in a bulk kill, and how many
+    /// others there were.
+    private func report(_ failures: [String]) {
+        guard let first = failures.first else { return }
+        let others = failures.count - 1
+        lastErrorMessage = others > 0 ? "\(first) (and \(others) more)" : first
+    }
 
     // MARK: - Docker
 

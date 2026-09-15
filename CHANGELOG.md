@@ -11,6 +11,79 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+A bug-hunting round: fuzzing, concurrent agents, corrupted stores, hostile
+tools and the app's own lifecycle. Everything below was reproduced first.
+
+### Fixed
+- **Guarding a busy port killed the server on it.** Watching or guarding a
+  port recorded its occupant in a different format from the one scans
+  write, so the next scan read the server already there as a newcomer: a
+  watch announced it, and a guard killed the very thing it was set to
+  protect.
+- **One long argument froze every scan.** The patterns that find a secret
+  in a command line backtracked over every way of splitting a run of word
+  characters: 800 characters took 2.6 seconds and a few kilobytes took
+  minutes, on every listener, on every scan. 500 KB now takes 0.15s.
+- **Killing a port inside tmux killed the whole session.** A tmux server
+  keeps the argv of the command that opened it, so `tmux new -s build tsc
+  --watch` looked like a reloader and the kill went to tmux and everything
+  under it: every pane, the editor, other servers.
+- **A port held by another user read as free.** The listener table cannot
+  see root's or `_postgres`'s sockets, so `free 5432` exited 0 and the
+  next server still could not bind. Kill, free, wait, reserve and exec now
+  ask the kernel before answering.
+- **Kills reported more than they did.** A partial kill exited 0 as
+  "killed"; a tree kill swallowed every child it could not stop (and its
+  pgrep fallback killed none at all); a process that had already exited
+  was recorded in History as killed; `free` checked that the pid died
+  rather than that the port was free.
+- **An agent installed through npm or pip looked like an ended session**,
+  because it runs as `node …/bin/gemini` or `python3 …/bin/aider`. That
+  let `kill --orphaned` reap a live agent's server and allowed a rival
+  agent's kill that should have been refused.
+- **Agent kills trimmed History to 50 entries** however long you had set
+  it, and changing the length in Settings dropped everything an agent had
+  recorded since the window last read it.
+- **One damaged entry hid every lease and every history row**, and the
+  next write saved that empty list over the good ones. Entries are now
+  salvaged one at a time.
+- **Four crashes**: a non-finite JSON-RPC id, an oversized `CLAUDE_PID`, a
+  closed stderr, and a stored lease naming an impossible pid.
+- **The popover's shortcuts stayed live after it closed**, so Return in
+  the Workbench started a kill from a list nobody could see, and Escape
+  stopped working everywhere. A confirmation opened from the popover fed
+  its own Return back and stacked a second dialog.
+- **Cut, Copy, Paste, Select All, Undo and Close did nothing** in every
+  PortNanny text field and window: a menu bar app still needs a main menu
+  for those keys to route.
+- The refresh timer stopped while any dialog or menu was open, blinding
+  the guard exactly then; the guard announced "Auto-killing" before
+  signalling anything and said nothing when a kill failed; refusal
+  banners never asked for notification permission, so macOS dropped them;
+  clicking a watch or guard banner did nothing; `portnanny://show` during
+  launch was dropped, closing the welcome tour left nothing on screen, and
+  a second copy of PortNanny guarded every port twice.
+- Smaller ones: `free-port --range` alone was rejected, a lease reason
+  kept `--token=…` unredacted and quoted it back to other agents, a
+  process name with a carriage return could write its own row into
+  `portnanny list`, Docker containers publishing a port range went
+  unnamed, a test worker under a path with a space could not be killed,
+  `portnanny://kill/9999/3000` acted on :3000, `agent-docs` replaced a
+  symlinked CLAUDE.md with a private copy, and a scan lost to a stalled
+  network mount stopped every later one.
+
+### Changed
+- Exit codes: a partial kill is 4, a lease or history write that fails is
+  73, and `exec` answers 126 and 127 like a shell.
+- MCP results say `isError` truthfully: a `wait_for_port_free` that timed
+  out is an error, an unknown `list_ports` filter is refused rather than
+  silently listing everything, `kill_port` validates its port and pid, and
+  `list_ports` with filter `mine` and no identity says so.
+- The shortcut recorder refuses ⌘W, ⌘Q and combinations macOS owns, which
+  it used to accept and then never fire.
+- Toasts and errors now appear in the Workbench and Settings; both were
+  drawn only by the popover.
+
 <!-- next -->
 
 ## 2.2.1 (2026-09-08)

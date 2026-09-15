@@ -44,6 +44,12 @@ public final class MCPServer {
 
         if method.hasPrefix("notifications/") { return nil }
         guard let id else { return nil }
+        // JSON-RPC ids are strings, numbers, or null. Echoing anything else
+        // back, such as the -Infinity that `-1e999` parses to, raised an
+        // exception Swift cannot catch and took the whole server down.
+        guard Self.isValidRequestID(id) else {
+            return fail(NSNull(), code: -32600, message: "invalid request: id must be a string, a finite number, or null")
+        }
 
         switch method {
         case "initialize":
@@ -145,10 +151,21 @@ public final class MCPServer {
             case "mine": options.mine = true
             case "unowned": options.unowned = true
             case "orphaned": options.orphaned = true
-            default: break
+            case .none, "all", "": break
+            case .some(let unknown):
+                // A misspelt filter used to answer with every port, which an
+                // agent reads as "none of these are mine".
+                return toolResult(text: "list_ports does not know the filter '\(unknown)'; use all, mine, unowned or orphaned",
+                                  structured: nil as String?, isError: true)
             }
             options.agent = arguments["agent"] as? String
             let scan = PortNannyCLI.scan(refreshDocker: true)
+            // "mine" with nobody to compare against is not an empty answer,
+            // it is an unanswerable question.
+            if options.mine, scan.caller == nil {
+                return toolResult(text: "PortNanny cannot tell who you are, so it cannot say which ports are yours. Export PORTNANNY_OWNER=<name> (and PORTNANNY_SESSION=<unique>) for the process that starts your servers, then call whoami.",
+                                  structured: nil as String?, isError: true)
+            }
             let ports = PortNannyCLI.filtered(scan.ports, by: options, caller: scan.caller)
             let summary = ports.isEmpty ? "No listening ports match." : ports.map { ":\($0.port) \($0.processName) (pid \($0.pid))\($0.agentOwner.map { " owned by \($0.label)" } ?? "")" }.joined(separator: "\n")
             return toolResult(text: summary, structured: ports, isError: false)
@@ -161,6 +178,14 @@ public final class MCPServer {
             options.force = arguments["force"] as? Bool ?? false
             guard options.port != nil || options.pid != nil else {
                 return toolResult(text: "kill_port needs a port or a pid", structured: nil as String?, isError: true)
+            }
+            // Checked here rather than left to read as "nothing is listening":
+            // an agent that sent :99999 has a bug, and should be told so.
+            if let port = options.port, !PortManager.isValidPortNumber(port) {
+                return toolResult(text: "kill_port: :\(port) is not a port number (1-65535)", structured: nil as String?, isError: true)
+            }
+            if let pid = options.pid, pid <= 0 {
+                return toolResult(text: "kill_port: \(pid) is not a pid", structured: nil as String?, isError: true)
             }
             let outcome = CLIKill.perform(options)
             return toolResult(text: outcome.text, structured: outcome.report, isError: Self.killNotDone.contains(outcome.report.exitCode))
@@ -214,10 +239,16 @@ public final class MCPServer {
             guard let port = arguments["port"] as? Int else {
                 return toolResult(text: "wait_for_port_free needs a port", structured: nil as String?, isError: true)
             }
+            guard PortManager.isValidPortNumber(port) else {
+                return toolResult(text: "wait_for_port_free: :\(port) is not a port number (1-65535)", structured: nil as String?, isError: true)
+            }
             // Capped: this blocks the whole server loop.
             let timeout = min(arguments["timeout_seconds"] as? Double ?? 10, 30)
             let report = PortNannyCLI.waitUntilFree(port: port, timeout: timeout)
-            return toolResult(text: report.free ? ":\(port) is free." : ":\(port) is still in use after \(Int(timeout))s.", structured: report, isError: false)
+            // A wait that ran out did not do what was asked, and said so in
+            // words while reporting success in the field agents check.
+            return toolResult(text: report.free ? ":\(port) is free." : ":\(port) is still in use after \(Int(timeout))s.",
+                              structured: report, isError: !report.free)
 
         default:
             return nil
@@ -243,11 +274,25 @@ public final class MCPServer {
         encode(["jsonrpc": "2.0", "id": id, "error": ["code": code, "message": message]])
     }
 
+    /// `JSONSerialization.data(withJSONObject:)` raises an Objective-C
+    /// exception, which `try?` does not catch, for a non-finite number anywhere
+    /// in the object. Checking first keeps a NaN in a tool result, or an
+    /// infinite id, from crashing the server an agent depends on.
     private func encode(_ object: [String: Any]) -> String {
-        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+        let fallback = #"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"could not encode response"}}"#
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
               let text = String(data: data, encoding: .utf8) else {
-            return #"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"could not encode response"}}"#
+            return fallback
         }
         return text
+    }
+
+    static func isValidRequestID(_ id: Any) -> Bool {
+        if id is NSNull || id is String { return true }
+        guard let number = id as? NSNumber else { return false }
+        // NSNumber wraps booleans too, and `true` is not a request id.
+        let isBoolean = CFGetTypeID(number) == CFBooleanGetTypeID()
+        return !isBoolean && number.doubleValue.isFinite
     }
 }

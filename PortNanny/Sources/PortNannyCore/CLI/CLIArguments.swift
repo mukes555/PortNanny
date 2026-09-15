@@ -12,6 +12,12 @@ public enum CLIExit {
     public static let managed: Int32 = 6
     /// EX_SOFTWARE: PortNanny itself failed (e.g. could not encode JSON).
     public static let internalError: Int32 = 70
+    /// EX_CANTCREAT: a lease or history entry could not be written. A script
+    /// that retries a kill must not retry this: nothing is wrong with the port.
+    public static let cannotWrite: Int32 = 73
+    /// What a shell answers for these, so `portnanny exec` reads the same way.
+    public static let notExecutable: Int32 = 126
+    public static let commandNotFound: Int32 = 127
 }
 
 public enum CLICommand: Equatable {
@@ -365,6 +371,7 @@ public enum CLIArguments {
 
     private static func parseFreePort(_ args: [String]) -> Result<CLICommand, ParseError> {
         var prefer = 3000
+        var preferWasGiven = false
         var range: ClosedRange<Int>?
         var json = false
         var index = 0
@@ -378,6 +385,7 @@ public enum CLIArguments {
                 if arg == "--prefer" {
                     guard let port = Int(args[index]), PortManager.isValidPortNumber(port) else { return .failure(.invalidNumber(args[index], option: "--prefer")) }
                     prefer = port
+                    preferWasGiven = true
                 } else {
                     guard let parsed = parseRange(args[index]) else { return .failure(.invalidNumber(args[index], option: "--range")) }
                     range = parsed
@@ -385,6 +393,7 @@ public enum CLIArguments {
             } else if let value = valueOf(option: "--prefer", in: arg) {
                 guard let port = Int(value), PortManager.isValidPortNumber(port) else { return .failure(.invalidNumber(value, option: "--prefer")) }
                 prefer = port
+                preferWasGiven = true
             } else if let value = valueOf(option: "--range", in: arg) {
                 guard let parsed = parseRange(value) else { return .failure(.invalidNumber(value, option: "--range")) }
                 range = parsed
@@ -395,6 +404,9 @@ public enum CLIArguments {
         }
         // Default range: the preferred port and the 999 above it.
         let resolved = range ?? prefer...min(prefer + 999, 65535)
+        // `--range 5000-5999` on its own is a documented call, and the
+        // unasked-for default of 3000 used to reject it as out of range.
+        if !preferWasGiven, !resolved.contains(prefer) { prefer = resolved.lowerBound }
         guard resolved.contains(prefer) else { return .failure(.invalidNumber("\(prefer)", option: "--prefer (outside --range)")) }
         return .success(.freePort(prefer: prefer, range: resolved, json: json))
     }

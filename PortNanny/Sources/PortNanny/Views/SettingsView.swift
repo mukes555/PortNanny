@@ -71,6 +71,7 @@ struct SettingsView: View {
                 .navigationTitle(router.pane.rawValue)
         }
         .frame(width: 640, height: 480)
+        .showsFeedback(from: portManager)
     }
 
     @ViewBuilder

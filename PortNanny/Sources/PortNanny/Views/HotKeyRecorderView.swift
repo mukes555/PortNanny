@@ -62,23 +62,37 @@ struct HotKeyRecorderView: View {
         }
 
         let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        let requiresRealModifier = flags.contains(.command) || flags.contains(.option) || flags.contains(.control)
-        guard requiresRealModifier, let key = event.charactersIgnoringModifiers, !key.isEmpty else {
+        guard let key = event.charactersIgnoringModifiers, !key.isEmpty else {
             errorText = "Include at least ⌘, ⌥, or ⌃"
+            return true
+        }
+        // The other two ways people close a sheet: they cancel, rather than
+        // being recorded as the shortcut that then stops closing anything.
+        if flags == [.command], ["w", "."].contains(key.lowercased()) {
+            dismiss()
+            return true
+        }
+        // A global hotkey outranks every app, so a plain ⌘ combination is a
+        // trap: ⌘W was accepted and from then on closed no tab anywhere.
+        let hasControl = flags.contains(.control)
+        let hasOptionWithCommand = flags.contains(.option) && flags.contains(.command)
+        guard hasControl || hasOptionWithCommand else {
+            errorText = "Use ⌃, or ⌥ with ⌘: a plain ⌘ shortcut would stop working in every other app"
             return true
         }
 
         let display = GlobalHotKey.displayString(for: flags, key: key)
-        let registered = appDelegate.setHotKey(
-            keyCode: UInt32(event.keyCode),
-            carbonModifiers: GlobalHotKey.carbonModifiers(from: flags),
-            display: display
-        )
+        let carbonModifiers = GlobalHotKey.carbonModifiers(from: flags)
+        guard !GlobalHotKey.isTakenBySystem(keyCode: UInt32(event.keyCode), carbonModifiers: carbonModifiers) else {
+            errorText = "\(display) belongs to macOS; it would be recorded and never fire"
+            return true
+        }
 
+        let registered = appDelegate.setHotKey(keyCode: UInt32(event.keyCode), carbonModifiers: carbonModifiers, display: display)
         if registered {
             dismiss()
         } else {
-            errorText = "\(display) couldn't be registered, likely taken by the system"
+            errorText = "\(display) couldn't be registered, likely taken by another app"
         }
         return true
     }

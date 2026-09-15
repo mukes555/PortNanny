@@ -33,8 +33,8 @@ public enum PreferencesMigration {
     /// must not inherit a real PortKilla's preferences).
     public static func runIntoSharedDomain() {
         let suite = HistoryManager.appSuiteName
-        guard suite == "com.mukes555.PortNanny", let shared = UserDefaults(suiteName: suite) else { return }
-        run(into: shared)
+        guard suite == "com.mukes555.PortNanny" else { return }
+        run(into: HistoryManager.appDefaults())
     }
 
     /// The new name for an old key, or nil for anything that is not ours.

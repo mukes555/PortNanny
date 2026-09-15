@@ -32,19 +32,45 @@ public enum AgentSignatures {
     ]
 
     public static let treeSignatures: [TreeSignature] = [
-        TreeSignature(name: "Claude Code", confidence: .agent, label: "claude") { _, exe in exe == "claude" },
-        // An npm install runs as node; without this its sessions read as ended.
         TreeSignature(name: "Claude Code", confidence: .agent, label: "claude") { cmd, exe in
-            exe == "node" && cmd.contains("/@anthropic-ai/claude-code/")
+            exe == "claude" || cmd.contains("/@anthropic-ai/claude-code/") || runsScript(named: "claude", cmd, exe)
         },
-        TreeSignature(name: "Codex CLI", confidence: .agent, label: "codex") { _, exe in exe == "codex" },
-        TreeSignature(name: "Gemini CLI", confidence: .agent, label: "gemini") { _, exe in exe == "gemini" },
-        TreeSignature(name: "Copilot CLI", confidence: .agent, label: "copilot") { _, exe in exe == "copilot" },
-        TreeSignature(name: "OpenCode", confidence: .agent, label: "opencode") { _, exe in exe == "opencode" },
-        TreeSignature(name: "Aider", confidence: .agent, label: "aider") { _, exe in exe == "aider" },
+        TreeSignature(name: "Codex CLI", confidence: .agent, label: "codex") { cmd, exe in
+            exe == "codex" || runsScript(named: "codex", cmd, exe)
+        },
+        TreeSignature(name: "Gemini CLI", confidence: .agent, label: "gemini") { cmd, exe in
+            exe == "gemini" || runsScript(named: "gemini", cmd, exe)
+        },
+        TreeSignature(name: "Copilot CLI", confidence: .agent, label: "copilot") { cmd, exe in
+            exe == "copilot" || runsScript(named: "copilot", cmd, exe)
+        },
+        TreeSignature(name: "OpenCode", confidence: .agent, label: "opencode") { cmd, exe in
+            exe == "opencode" || runsScript(named: "opencode", cmd, exe)
+        },
+        TreeSignature(name: "Aider", confidence: .agent, label: "aider") { cmd, exe in
+            exe == "aider" || runsScript(named: "aider", cmd, exe)
+        },
         TreeSignature(name: "Zed", confidence: .editorTerminal, label: "zed") { _, exe in exe == "zed" },
     ] + appBundles.map { bundle in
         TreeSignature(name: bundle.name, confidence: .editorTerminal, label: bundle.pathFragment) { cmd, _ in cmd.contains(bundle.pathFragment) }
+    }
+
+    /// Whether this process is an interpreter running the named tool's script.
+    ///
+    /// An npm or pip install of an agent runs as `node /usr/local/bin/gemini`
+    /// or `python3 /usr/local/bin/aider`: the kernel name is the
+    /// interpreter's, so matching the name alone missed it. A server the
+    /// agent had started then read as belonging to an ended session, which
+    /// `kill --orphaned` reaps and other agents are allowed to kill: exactly
+    /// the friendly fire the guard exists to prevent.
+    static func runsScript(named tool: String, _ command: String, _ executableName: String) -> Bool {
+        let isInterpreter = ["node", "bun", "deno", "ruby"].contains(executableName) || executableName.hasPrefix("python")
+        guard isInterpreter else { return false }
+        return command.split(separator: " ").dropFirst().contains { argument in
+            guard argument.hasPrefix("/") || argument.contains("/") else { return false }
+            let file = argument.split(separator: "/").last.map(String.init) ?? ""
+            return file == tool || file == "\(tool).js" || file == "\(tool).mjs" || file == "\(tool).py"
+        }
     }
 
     /// An environment variable an agent leaves on its children. `value` nil
@@ -86,6 +112,15 @@ public enum AgentSignatures {
     /// The declared owner or session from an environment, new name first.
     public static func declaredOwner(in environment: [String: String]) -> String? {
         environment[declaredOwnerKey] ?? environment[legacyDeclaredOwnerKey]
+    }
+
+    /// CLAUDE_PID, when it names something that could be a process. Any
+    /// process can set this variable to anything, and a value past what a
+    /// 32-bit pid holds used to trap the moment it reached the kernel.
+    public static func claudeSessionPid(in environment: [String: String]) -> Int? {
+        guard let raw = environment[claudeSessionKey], let pid = Int(raw) else { return nil }
+        let couldBeAProcess = pid > 0 && pid_t(exactly: pid) != nil
+        return couldBeAProcess ? pid : nil
     }
 
     public static func declaredSession(in environment: [String: String]) -> String? {

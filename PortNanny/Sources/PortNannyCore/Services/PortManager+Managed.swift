@@ -13,9 +13,12 @@ extension PortManager {
             killPort(port)
             return
         }
-        killProcess(pid: supervisor, name: name, killTree: true)
-        history.addEntry(port: port.port, processName: port.processName, action: .killed,
-                         owner: port.agentOwner?.name, killedBy: "\(KillInitiator.user.rawValue) (stopped \(managed.label))")
+        // The History entry waits for the kill: it used to be written first,
+        // so a supervisor that refused to die was recorded as stopped anyway.
+        killProcess(pid: supervisor, name: name, killTree: true) { [weak self] in
+            self?.history.addEntry(port: port.port, processName: port.processName, action: .killed,
+                                   owner: port.agentOwner?.name, killedBy: "\(KillInitiator.user.rawValue) (stopped \(managed.label))")
+        }
     }
 
     /// Runs the runtime's own stop command (pm2 stop, brew services stop,

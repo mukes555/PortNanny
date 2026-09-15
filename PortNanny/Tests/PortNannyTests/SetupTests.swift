@@ -114,4 +114,26 @@ final class SetupTests: XCTestCase {
             XCTAssertTrue(skill.contains(command), "the skill mentions \(command)")
         }
     }
+
+    /// A CLAUDE.md symlinked to a shared doc (or to the AGENTS.md beside it)
+    /// was replaced by a private copy, and the shared file stopped getting
+    /// anything PortNanny wrote.
+    func testInstallingThroughASymlinkWritesTheRealFile() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("portnanny-symlink-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+
+        let real = folder.appendingPathComponent("AGENTS.md")
+        try "# shared rules\n".write(to: real, atomically: true, encoding: .utf8)
+        let link = folder.appendingPathComponent("CLAUDE.md")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+
+        XCTAssertEqual(try AgentDocsInstaller.install(into: link), .added)
+
+        let destination = try FileManager.default.destinationOfSymbolicLink(atPath: link.path)
+        XCTAssertEqual((destination as NSString).lastPathComponent, "AGENTS.md", "the link is still a link")
+        let written = try String(contentsOf: real, encoding: .utf8)
+        XCTAssertTrue(written.hasPrefix("# shared rules"), "the shared file kept its own content")
+        XCTAssertTrue(written.contains("portnanny"), "and gained the block")
+    }
 }

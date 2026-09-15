@@ -67,11 +67,13 @@ public struct ProcessTable {
         // Skipping a chain's end (launchd's ppid 0) must not end the walk:
         // with `extra` pids the caller's own chain is still in the queue.
         while let current = queue.popLast(), seen.count < 64 {
-            guard current > 0, !seen.contains(current) else { continue }
+            // `extra` comes from callers, and so from the environment; a value
+            // no pid can hold is skipped rather than narrowed into a trap.
+            guard current > 0, !seen.contains(current), let kernelPid = pid_t(exactly: current) else { continue }
             seen.insert(current)
-            guard let bsd = NativeScanner.bsdInfo(Int32(current)) else { continue }
+            guard let bsd = NativeScanner.bsdInfo(kernelPid) else { continue }
             let shortName = NativeScanner.stringFromFixedCArray(bsd.pbi_name)
-            let facts = ProcessFacts.shared.facts(for: Int32(current), startedAt: bsd.pbi_start_tvsec, shortName: shortName)
+            let facts = ProcessFacts.shared.facts(for: kernelPid, startedAt: bsd.pbi_start_tvsec, shortName: shortName)
             let name = facts.executablePath.map { ($0 as NSString).lastPathComponent } ?? shortName
             entries.append(Entry(
                 pid: current, ppid: Int(bsd.pbi_ppid), rssKB: 0, cpuPercent: 0, ageSeconds: nil,

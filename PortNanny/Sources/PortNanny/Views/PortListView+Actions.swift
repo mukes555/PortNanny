@@ -28,20 +28,8 @@ extension PortListView {
 
     /// Returns true when the event was handled (and should be consumed).
     func handleKeyDown(_ event: NSEvent) -> Bool {
-        // Don't hijack keys while a sheet or alert has its own focus.
-        guard activeSheet == nil else { return false }
-        // Both the popover and the pinned panel host this view; only the
-        // copy whose window is key may act, or every shortcut fires twice.
-        // With no key window at all (one just closed) the panel copy still
-        // answers, as long as the popover isn't the thing on screen.
-        let keyWindow = NSApp.keyWindow
-        let pinnedIsKey = keyWindow != nil && keyWindow === appDelegate.pinnedPanel
-        if hostedInPinnedWindow {
-            let nothingIsKey = keyWindow == nil && !appDelegate.popover.isShown
-            guard pinnedIsKey || nothingIsKey else { return false }
-        } else {
-            guard !pinnedIsKey else { return false }
-        }
+        // Don't hijack keys while a sheet has its own focus.
+        guard activeSheet == nil, ownsKeyPress(event) else { return false }
 
         let hasCommand = event.modifierFlags.contains(.command)
 
@@ -116,9 +104,40 @@ extension PortListView {
         case "q":
             NSApplication.shared.terminate(nil)
             return true
+        case "w" where !hostedInPinnedWindow:
+            // The main menu's Close cannot close a popover, which has no close
+            // button; the pinned panel has one, so the menu handles that copy.
+            appDelegate.closePopover()
+            return true
         default:
             return false
         }
+    }
+
+    /// Whether a key press is meant for this copy of the list.
+    ///
+    /// The monitor sees every key press in the app, and two things made that
+    /// dangerous. The popover keeps its view, and so this monitor, alive
+    /// after it closes: ↓ and ⏎ in the Workbench moved through and killed
+    /// rows of the invisible popover list. And a confirmation opened from
+    /// here gets its own ⏎ and Esc through this same monitor: ⏎ stacked a
+    /// second dialog, and Esc closed the popover behind the first.
+    ///
+    /// Both the popover and the pinned panel host this view, so each copy
+    /// also answers only for its own window, or every shortcut fires twice.
+    func ownsKeyPress(_ event: NSEvent) -> Bool {
+        let aModalIsUp = NSApp.modalWindow != nil
+        guard !aModalIsUp else { return false }
+        // A key event goes to the key window. With none (one just closed),
+        // it has no window, and the copy on screen may still answer.
+        let target = event.window
+        let popoverIsOpen = appDelegate.popover.isShown
+        if hostedInPinnedWindow {
+            guard let panel = appDelegate.pinnedPanel else { return false }
+            return target === panel || (target == nil && !popoverIsOpen)
+        }
+        guard popoverIsOpen else { return false }
+        return target == nil || target === appDelegate.popover.contentViewController?.view.window
     }
 
     func moveSelection(by offset: Int) {

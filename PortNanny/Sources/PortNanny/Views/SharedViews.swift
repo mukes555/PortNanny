@@ -250,3 +250,35 @@ struct ToastView: View {
             .cornerRadius(8)
     }
 }
+
+/// The toast and the last error, in any window that shows this content.
+///
+/// Both were drawn by the popover alone, so a kill that failed in the
+/// Workbench, an update check in Settings, or a login-item switch that
+/// flipped back said nothing at all: the message went to a closed popover,
+/// where it also sat waiting to be shown the next time it opened.
+struct FeedbackOverlay: ViewModifier {
+    @ObservedObject var portManager: PortManager
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .bottom) {
+            VStack(spacing: 8) {
+                if let error = portManager.lastErrorMessage {
+                    ErrorBannerView(message: error) { portManager.lastErrorMessage = nil }
+                        .frame(maxWidth: 520)
+                }
+                if let toast = portManager.toastMessage {
+                    ToastView(message: toast)
+                }
+            }
+            .padding(.bottom, 14)
+            .animation(.easeInOut(duration: 0.15), value: portManager.toastMessage)
+        }
+    }
+}
+
+extension View {
+    func showsFeedback(from portManager: PortManager) -> some View {
+        modifier(FeedbackOverlay(portManager: portManager))
+    }
+}

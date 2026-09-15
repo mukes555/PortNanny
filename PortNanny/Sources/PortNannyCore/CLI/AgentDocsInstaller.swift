@@ -69,7 +69,12 @@ public enum AgentDocsInstaller {
         }
     }
 
-    public static func install(into file: URL) throws -> Result {
+    public static func install(into requested: URL) throws -> Result {
+        // An atomic write replaces the file, and a CLAUDE.md symlinked to a
+        // shared doc (or to the AGENTS.md beside it) would become a private
+        // copy: the shared file would stop getting anything. Follow the link
+        // and write what it points at.
+        let file = requested.resolvingSymlinksInPath()
         // A file that exists but cannot be read must not be replaced by the block alone.
         var existing = ""
         if FileManager.default.fileExists(atPath: file.path) {

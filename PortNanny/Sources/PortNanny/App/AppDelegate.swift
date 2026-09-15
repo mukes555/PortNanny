@@ -15,7 +15,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     let settingsRouter = SettingsView.Router()
     var workbenchWindow: NSWindow?
     var tourWindow: NSWindow?
-    private(set) var pinnedPanel: NSPanel?
+    /// Only `togglePinnedWindow` and `windowWillClose` (both in
+    /// AppDelegate+Windows) ever set this.
+    var pinnedPanel: NSPanel?
     @Published var isPinned = false
     private var hotKey: GlobalHotKey?
     private var refusalWatcher: RefusalWatcher?
@@ -48,6 +50,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         let arguments = Array(Foundation.ProcessInfo.processInfo.arguments.dropFirst())
         if let exitCode = PortNannyCLI.run(arguments) {
             exit(exitCode)
+        }
+
+        // LaunchServices only stops a second instance of the same bundle
+        // path: the copy on a mounted DMG and the one in Applications both
+        // run happily, and then every guard kills twice and ⌥⌘P toggles
+        // whichever answers first. Hand the person the one already running.
+        if anotherInstanceIsRunning {
+            ShowSignal.post()
+            exit(0)
         }
 
         // PortKilla's preferences come along on the first run under the new name.
@@ -91,6 +102,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
         // Hide dock icon (make it a background agent / menu bar app only)
         NSApp.setActivationPolicy(.accessory)
+        NSApp.mainMenu = MainMenu.make()
 
         // Global hotkey from anywhere toggles the popover (permission-free
         // Carbon API); the shortcut is set in Settings > Shortcuts.
@@ -98,6 +110,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
         // A refusal the CLI issues to an agent becomes a notification here.
         refusalWatcher = RefusalWatcher(portManager: portManager) { [weak self] in self?.revealPorts() }
+
+        // A second copy someone opened asks this one to show itself.
+        DistributedNotificationCenter.default().addObserver(
+            forName: ShowSignal.name, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.revealPorts()
+        }
 
         // First launch: the tour, then the popover, so the app does not
         // silently vanish into the menu bar. An upgrade skips the tour (it
@@ -113,11 +132,36 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             defaults.set(true, forKey: DefaultsKey.didFinishTour)
         }
 
+        if hasPendingShowRequest {
+            hasPendingShowRequest = false
+            revealPorts()
+        }
+
         // Developer-only rendering hooks (screenshots, README GIF, CI smoke
         // test). Compiled only in debug builds, never in the shipped app.
         #if DEBUG
         installDevHooks()
         #endif
+    }
+
+    /// True when another PortNanny process is already up. Debug and scripted
+    /// runs have no bundle identifier, so they are never counted.
+    private static var anotherInstanceIsRunning: Bool {
+        guard let identifier = Bundle.main.bundleIdentifier else { return false }
+        let mine = NSRunningApplication.current.processIdentifier
+        return NSRunningApplication.runningApplications(withBundleIdentifier: identifier)
+            .contains { $0.processIdentifier != mine }
+    }
+
+    /// A `portnanny://show` that arrived while the app was still launching.
+    private var hasPendingShowRequest = false
+
+    /// Opening PortNanny again (Spotlight, Finder, Raycast, the Dock) shows
+    /// the port list. Without this the app looked dead to anyone whose menu
+    /// bar is full, or whose icon hides behind a notch.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        revealPorts()
+        return true
     }
 
 
@@ -135,198 +179,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         menuBarState = (active, title, icon)
         button.image = MenuBarGlyph.image(icon, active: active)
         button.title = title
-    }
-
-    /// The popover takes the chosen size at once; the pinned panel grows to
-    /// it when it is smaller and keeps whatever the person stretched it to.
-    func applyPopoverSize() {
-        let size = portManager.popoverSize.dimensions
-        popover.contentSize = size
-        guard let panel = pinnedPanel else { return }
-        panel.minSize = size
-        if panel.frame.width < size.width || panel.frame.height < size.height {
-            panel.setContentSize(size)
-        }
-    }
-
-    func popoverWillShow(_ notification: Notification) {
-        portManager.setUIVisible(true)
-    }
-
-    func popoverDidClose(_ notification: Notification) {
-        // A pinned window or the Workbench keeps the fast refresh cadence alive
-        portManager.setUIVisible(isPinned || workbenchIsVisible)
-    }
-
-    private var workbenchIsVisible: Bool {
-        workbenchWindow?.isVisible ?? false
-    }
-
-    // MARK: - Pinned floating window
-
-    /// A floating panel with the same content, for keeping an eye on ports
-    /// while working ("is my build's port free yet?").
-    func togglePinnedWindow() {
-        if let panel = pinnedPanel {
-            panel.close()
-            return
-        }
-
-        let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: portManager.popoverSize.dimensions),
-            styleMask: [.titled, .closable, .resizable, .utilityWindow],
-            backing: .buffered,
-            defer: false
-        )
-        panel.title = "PortNanny"
-        panel.level = .floating
-        panel.isReleasedWhenClosed = false
-        panel.hidesOnDeactivate = false
-        panel.minSize = portManager.popoverSize.dimensions
-        panel.contentViewController = NSHostingController(
-            rootView: PortListView(portManager: portManager, hostedInPinnedWindow: true)
-                .environmentObject(self)
-        )
-        panel.delegate = self
-        // Remember where the user put it (and on which display); centre only
-        // the very first time.
-        panel.setFrameAutosaveName("PortNannyPinnedWindow")
-        if !panel.setFrameUsingName("PortNannyPinnedWindow") {
-            panel.center()
-        }
-        panel.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-
-        pinnedPanel = panel
-        isPinned = true
-        // The pinned window replaces the popover: close it so there aren't
-        // two identical copies on screen.
-        popover.performClose(nil)
-        portManager.setUIVisible(true)
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        let closing = notification.object as? NSWindow
-        if closing === workbenchWindow {
-            portManager.setUIVisible(popover.isShown || isPinned)
-            return
-        }
-        guard closing === pinnedPanel else { return }
-        pinnedPanel = nil
-        isPinned = false
-        portManager.setUIVisible(popover.isShown || workbenchIsVisible)
-    }
-
-    // MARK: - Tour
-
-    func showTour() {
-        popover.performClose(nil)
-        if tourWindow == nil {
-            let view = TourView(portManager: portManager) { [weak self] in
-                self?.tourWindow?.close()
-                self?.togglePopover()
-            }
-            .environmentObject(self)
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 460, height: 400),
-                styleMask: [.titled, .closable],
-                backing: .buffered, defer: false
-            )
-            window.title = "Welcome to PortNanny"
-            window.isReleasedWhenClosed = false
-            window.contentViewController = NSHostingController(rootView: view)
-            window.center()
-            tourWindow = window
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        tourWindow?.makeKeyAndOrderFront(nil)
-    }
-
-    // MARK: - Workbench
-
-    /// The full-size window: table, projects, agent sessions, watchlist,
-    /// history, and an inspector. One instance, remembered position.
-    func openWorkbench(section: WorkbenchView.Section = .ports, selection: String? = nil) {
-        popover.performClose(nil)
-        if workbenchWindow == nil {
-            let view = WorkbenchView(portManager: portManager, initialSection: section, initialSelection: selection).environmentObject(self)
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1380, height: 740),
-                styleMask: [.titled, .closable, .resizable, .miniaturizable],
-                backing: .buffered, defer: false
-            )
-            window.title = "PortNanny Workbench"
-            window.isReleasedWhenClosed = false
-            window.contentViewController = NSHostingController(rootView: view)
-            window.setFrameAutosaveName("PortNannyWorkbench")
-            if !window.setFrameUsingName("PortNannyWorkbench") {
-                window.center()
-            }
-            window.delegate = self
-            workbenchWindow = window
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        workbenchWindow?.makeKeyAndOrderFront(nil)
-        portManager.setUIVisible(true)
-    }
-
-    @objc func togglePopover() {
-        // While pinned, there's a floating window already: don't open a second
-        // identical popover; just bring the pinned window forward.
-        if let panel = pinnedPanel {
-            panel.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
-        if let button = statusItem.button {
-            if popover.isShown {
-                popover.performClose(nil)
-            } else {
-                popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-                NSApp.activate(ignoringOtherApps: true)
-            }
-        }
-    }
-
-    func closePopover() {
-        popover.performClose(nil)
-    }
-
-    /// Brings the port list forward without toggling it away when it is
-    /// already showing.
-    func revealPorts() {
-        if pinnedPanel != nil || !popover.isShown {
-            togglePopover()
-        } else {
-            NSApp.activate(ignoringOtherApps: true)
-        }
-    }
-
-    /// Opens the dedicated Settings window (gear icon / ⌘,), at a pane when
-    /// something points there.
-    func openSettings(pane: SettingsView.Pane? = nil) {
-        // The transient popover floats at a high window level and would sit on
-        // top of a normal window; close it so Settings is actually visible.
-        popover.performClose(nil)
-        if let pane { settingsRouter.pane = pane }
-
-        if settingsWindow == nil {
-            let view = SettingsView(portManager: portManager, router: settingsRouter).environmentObject(self)
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
-                styleMask: [.titled, .closable],
-                backing: .buffered, defer: false
-            )
-            window.title = "PortNanny Settings"
-            window.isReleasedWhenClosed = false
-            window.contentViewController = NSHostingController(rootView: view)
-            window.center()
-            settingsWindow = window
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        settingsWindow?.makeKeyAndOrderFront(nil)
-        settingsWindow?.orderFrontRegardless()
     }
 
     // MARK: - Global hotkey
@@ -400,11 +252,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
                 lastURLKillAsked = Date()
                 confirmAndKillFromURL(port: port, force: force)
             case .show:
-                // The URL can arrive during launch, before the popover exists.
-                guard popover != nil else { break }
-                if !popover.isShown {
-                    togglePopover()
+                // The URL can arrive before launch has built the popover, and
+                // dropping it left `open portnanny://show` doing nothing at all.
+                guard popover != nil else {
+                    hasPendingShowRequest = true
+                    break
                 }
+                revealPorts()
             case nil:
                 break
             }
@@ -430,22 +284,4 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         }
     }
 
-    func showHistory() {
-        if historyWindow == nil {
-            let historyView = HistoryView(portManager: portManager)
-            historyWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
-                styleMask: [.titled, .closable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            historyWindow?.center()
-            historyWindow?.title = "PortNanny History"
-            historyWindow?.contentViewController = NSHostingController(rootView: historyView)
-            historyWindow?.isReleasedWhenClosed = false
-        }
-
-        historyWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
 }

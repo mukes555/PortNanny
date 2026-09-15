@@ -77,6 +77,9 @@ public final class HistoryManager: ObservableObject {
     /// Refusals the guard issued to agents, newest first, capped at twenty.
     @Published public private(set) var refusals: [PortHistoryItem] = []
     private let defaults: UserDefaults
+    /// The app and every CLI and MCP process append to this store; without a
+    /// shared lock, fifteen agents refused at once kept only twelve refusals.
+    private let lock: SharedStore.Lock
     private static let maxRefusals = 20
 
     /// Kills and refusals together, newest first.
@@ -84,33 +87,63 @@ public final class HistoryManager: ObservableObject {
         (history + refusals).sorted { $0.timestamp > $1.timestamp }
     }
 
+    public static let defaultLimit = 50
+    /// The lengths a stored History preference may have; anything else is ignored.
+    public static let limitRange = 10...1000
+
     /// Set from the History preference; trimming applies immediately.
-    public var maxHistoryItems = 50 {
-        didSet { trimAndSave() }
+    public var maxHistoryItems = HistoryManager.defaultLimit {
+        // Re-read first: this copy may be older than kills an agent has
+        // recorded since, and saving it as it was would drop them.
+        didSet {
+            guard maxHistoryItems != oldValue else { return }
+            lock.withLock { loadHistory(); trimAndSave() }
+        }
     }
 
-    public init(defaults: UserDefaults = .standard) {
+    /// `lockName` defaults to the shared domain, so the app's `.shared` store
+    /// and the CLI's `appStore()`, which reach the same plist by different
+    /// routes, take the same lock.
+    public init(defaults: UserDefaults = .standard, lockName: String = HistoryManager.appSuiteName) {
         self.defaults = defaults
+        self.lock = SharedStore.Lock(name: "\(lockName)-history")
+        // Every CLI and MCP process trims on write too. Assuming the default
+        // there cut a History of 500 down to 50 on the first agent kill.
+        maxHistoryItems = Self.storedLimit(in: defaults)
         loadHistory()
+    }
+
+    /// The History preference as Settings saved it, or the default when it is
+    /// missing or not a length Settings could have saved.
+    public static func storedLimit(in defaults: UserDefaults) -> Int {
+        guard let stored = defaults.object(forKey: DefaultsKey.historyLimit) as? Int, limitRange.contains(stored) else {
+            return defaultLimit
+        }
+        return stored
     }
 
     public func addEntry(port: Int, processName: String, action: PortHistoryItem.HistoryAction,
                   owner: String? = nil, killedBy: String? = nil) {
-        // The CLI and the app share this store; re-read before writing so
-        // neither clobbers what the other appended.
-        loadHistory()
-        let item = PortHistoryItem(port: port, processName: processName, action: action, owner: owner, killedBy: killedBy)
-        history.insert(item, at: 0)
-        trimAndSave()
+        // The CLI and the app share this store. Re-reading before writing only
+        // helps if nobody else writes between the read and the write, which
+        // is what the lock is for.
+        lock.withLock {
+            loadHistory()
+            let item = PortHistoryItem(port: port, processName: processName, action: action, owner: owner, killedBy: killedBy)
+            history.insert(item, at: 0)
+            trimAndSave()
+        }
     }
 
     public func addRefusal(port: Int, processName: String, owner: String?, refused caller: String) {
-        loadHistory()
-        let item = PortHistoryItem(port: port, processName: processName, action: .refused, owner: owner, killedBy: caller)
-        refusals.insert(item, at: 0)
-        refusals = Array(refusals.prefix(Self.maxRefusals))
-        if let data = try? JSONEncoder().encode(refusals) {
-            defaults.set(data, forKey: DefaultsKey.refusals)
+        lock.withLock {
+            loadHistory()
+            let item = PortHistoryItem(port: port, processName: processName, action: .refused, owner: owner, killedBy: caller)
+            refusals.insert(item, at: 0)
+            refusals = Array(refusals.prefix(Self.maxRefusals))
+            if let data = try? JSONEncoder().encode(refusals) {
+                defaults.set(data, forKey: DefaultsKey.refusals)
+            }
         }
     }
 
@@ -122,7 +155,17 @@ public final class HistoryManager: ObservableObject {
     /// would not resolve to the app's domain (the binary is reached through
     /// a symlink), so the domain is named explicitly.
     public static func appStore() -> HistoryManager {
-        HistoryManager(defaults: UserDefaults(suiteName: appSuiteName) ?? .standard)
+        HistoryManager(defaults: appDefaults())
+    }
+
+    /// The app's preference domain, from wherever this code is running.
+    /// Inside the app that domain *is* `.standard`, and asking for it by name
+    /// returns nil and logs "using your own bundle identifier as a suite name
+    /// does not make sense"; from the CLI it has to be named.
+    public static func appDefaults() -> UserDefaults {
+        let suite = appSuiteName
+        if suite == Bundle.main.bundleIdentifier { return .standard }
+        return UserDefaults(suiteName: suite) ?? .standard
     }
 
     /// The shared preference domain. Debug builds honour PORTNANNY_DEFAULTS_SUITE
@@ -146,20 +189,25 @@ public final class HistoryManager: ObservableObject {
     }
 
     private func loadHistory() {
+        // Entries that no longer decode are dropped one by one rather than
+        // taking the whole list with them, which the next save would then
+        // have written over every good entry.
         if let data = defaults.data(forKey: DefaultsKey.history),
-           let items = try? JSONDecoder().decode([PortHistoryItem].self, from: data) {
+           let items = SharedStore.decodeArray(PortHistoryItem.self, from: data) {
             history = items
         }
         if let data = defaults.data(forKey: DefaultsKey.refusals),
-           let items = try? JSONDecoder().decode([PortHistoryItem].self, from: data) {
+           let items = SharedStore.decodeArray(PortHistoryItem.self, from: data) {
             refusals = items
         }
     }
 
     public func clearHistory() {
-        history.removeAll()
-        refusals.removeAll()
-        defaults.removeObject(forKey: DefaultsKey.history)
-        defaults.removeObject(forKey: DefaultsKey.refusals)
+        lock.withLock {
+            history.removeAll()
+            refusals.removeAll()
+            defaults.removeObject(forKey: DefaultsKey.history)
+            defaults.removeObject(forKey: DefaultsKey.refusals)
+        }
     }
 }

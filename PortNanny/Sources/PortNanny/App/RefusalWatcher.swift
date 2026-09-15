@@ -54,9 +54,9 @@ final class RefusalWatcher: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         defer { completionHandler() }
-        guard let payload = RefusalSignal.Payload(userInfo: response.notification.request.content.userInfo) else { return }
         switch response.actionIdentifier {
         case Notifier.stopAnywayAction:
+            guard let payload = RefusalSignal.Payload(userInfo: response.notification.request.content.userInfo) else { return }
             // A fresh scan finds the current occupant; the usual confirmation
             // (owner, clients, lease, supervisor) applies before anything dies.
             let manager = portManager
@@ -64,7 +64,11 @@ final class RefusalWatcher: NSObject, UNUserNotificationCenterDelegate {
                 KillFlow(portManager: manager).requestKill(target, force: false, killTree: false)
                 return false
             }
+        case UNNotificationDismissActionIdentifier:
+            return
         default:
+            // Any other click is on the banner itself. Watch and guard banners
+            // carry no payload, and used to do nothing at all when clicked.
             reveal()
         }
     }

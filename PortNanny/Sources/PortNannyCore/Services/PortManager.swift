@@ -34,6 +34,8 @@ public class PortManager: ObservableObject {
     /// Not published: no view reads it, and publishing it forced two
     /// whole-tree re-renders per refresh even when nothing changed.
     public var isRefreshing = false
+    /// When the scan in flight began; see `scanIsLostAfter`.
+    public var refreshStarted = Date.distantPast
     /// Full-depth signature of `activePorts`, kept so a refresh compares one
     /// side instead of rebuilding both.
     public var activeSignature: [String] = []
@@ -63,6 +65,8 @@ public class PortManager: ObservableObject {
     public let processScanner = ProcessScanner()
     public let killer = ProcessKiller()
     public var refreshTimer: Timer?
+    /// Hourly "is there a new version?"; see `startUpdateChecks`.
+    public var updateTimer: Timer?
     /// Set by the debug render hooks: the ports come from scripted data and
     /// a refresh must not replace them with real ones.
     public private(set) var usesDemoData = false
@@ -233,7 +237,13 @@ public class PortManager: ObservableObject {
         }
     }
 
-    @Published public var autoUpdateCheck = true { didSet { persist(autoUpdateCheck, DefaultsKey.autoUpdateCheck) } }
+    @Published public var autoUpdateCheck = true {
+        didSet {
+            persist(autoUpdateCheck, DefaultsKey.autoUpdateCheck)
+            guard !isRestoringPreferences else { return }
+            startUpdateChecks()
+        }
+    }
     @Published public var includePrereleases = false { didSet { persist(includePrereleases, DefaultsKey.includePrereleases) } }
 
     // Policy the CLI follows too; see `Policy`.
@@ -256,7 +266,7 @@ public class PortManager: ObservableObject {
     }
 
     /// How many kills the History window keeps.
-    @Published public var historyLimit: Int = 50 {
+    @Published public var historyLimit: Int = HistoryManager.defaultLimit {
         didSet {
             history.maxHistoryItems = historyLimit
             guard !isRestoringPreferences else { return }
@@ -284,7 +294,7 @@ public class PortManager: ObservableObject {
         }
     }
 
-    /// Occupancy of watched ports at the previous scan (port -> process name).
+    /// Occupancy of watched ports at the previous scan, as `occupancy(of:in:)` writes it.
     public var watchedOccupancy: [Int: String] = [:]
 
     /// One-shot "tell me when this frees up" armed when a kill didn't finish
@@ -354,9 +364,7 @@ public class PortManager: ObservableObject {
         }
         Policy.refusesUnclaimedServers = guardRefusesUnclaimed
         Policy.defaultLeaseTTL = leaseDefaultTTL
-        if let stored = defaults.object(forKey: DefaultsKey.historyLimit) as? Int, (10...1000).contains(stored) {
-            historyLimit = stored
-        }
+        historyLimit = HistoryManager.storedLimit(in: defaults)
         if let stored = defaults.array(forKey: DefaultsKey.guardedPorts) as? [Int] {
             // A guard only makes sense on a watched port; the invariant is
             // enforced on writes, so re-establish it for whatever was stored.
@@ -381,12 +389,20 @@ public class PortManager: ObservableObject {
                     self?.checkForUpdates(manual: false)
                 }
             }
+            startUpdateChecks()
         }
     }
 
     public func isProtectedProcessName(_ processName: String) -> Bool {
+        Self.isProtected(processName, by: protectedProcessSubstrings)
+    }
+
+    /// The same question with the list passed in, for a background thread:
+    /// the published list belongs to the main one, and Settings can rewrite
+    /// it while a kill decision is being made.
+    public static func isProtected(_ processName: String, by substrings: [String]) -> Bool {
         let lower = processName.lowercased()
-        return protectedProcessSubstrings.contains { lower.contains($0) }
+        return substrings.contains { lower.contains($0) }
     }
 
     public func resetProtectedProcessSubstrings() {
@@ -414,7 +430,7 @@ public class PortManager: ObservableObject {
         includePrereleases = false
         guardRefusesUnclaimed = true
         leaseDefaultTTL = Reservation.defaultTTL
-        historyLimit = 50
+        historyLimit = HistoryManager.defaultLimit
         protectedProcessSubstrings = Self.defaultProtectedProcessSubstrings
         watchedPorts = []
         guardedPorts = []

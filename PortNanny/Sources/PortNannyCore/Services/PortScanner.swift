@@ -82,7 +82,7 @@ public class PortScanner {
                 allowedExitCodes: [0, 1]
             )
         } catch let error as CommandRunner.CommandError {
-            if case .failed(_, let code) = error { throw ScanError.commandFailed(code) }
+            if case .failed(_, let code, _) = error { throw ScanError.commandFailed(code) }
             throw ScanError.invalidOutput
         }
 

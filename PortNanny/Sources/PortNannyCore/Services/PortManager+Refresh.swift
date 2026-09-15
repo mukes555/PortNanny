@@ -47,14 +47,16 @@ extension PortManager {
             return
         }
 
-        let timer = Timer.scheduledTimer(
-            withTimeInterval: interval,
-            repeats: true
-        ) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             self?.refresh()
         }
         // Let macOS coalesce wakeups for power efficiency.
         timer.tolerance = interval * 0.1
+        // Common modes, not the default one: a kill confirmation or an open
+        // menu runs its own run loop mode, and the default-mode timer stopped
+        // there. Scanning stopped with it, so a guard watched nothing for as
+        // long as a dialog stood open.
+        RunLoop.main.add(timer, forMode: .common)
         refreshTimer = timer
 
         if refreshNow {
@@ -90,14 +92,25 @@ extension PortManager {
 
     // MARK: - Refresh
 
+    /// After this long, a scan that has not come back is treated as lost
+    /// rather than as one still in flight. A process whose working directory
+    /// is on a stalled network mount can park a scan in the kernel for as
+    /// long as the mount takes, and every later refresh was dropped as
+    /// re-entrant: the list, the badge and the guard all stopped with it.
+    static let scanIsLostAfter: TimeInterval = 90
+
     public func refresh(showToast: Bool = false) {
         if usesDemoData { return }
-        if isRefreshing {
+        if isRefreshing, Date().timeIntervalSince(refreshStarted) < Self.scanIsLostAfter {
             // A press during a slow scan must not look like nothing happened.
             if showToast { self.showToast("Refreshing…") }
             return
         }
+        if isRefreshing {
+            Log.scan.error("a scan has not answered in \(Int(Self.scanIsLostAfter))s; starting another")
+        }
         isRefreshing = true
+        refreshStarted = Date()
         // Nothing on screen: the badge and the watchlist need six fields, not
         // working directories, Docker names, or agent attribution.
         let depth: PortScanner.ScanDepth = isUIVisible ? .full : .light
