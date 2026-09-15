@@ -232,7 +232,9 @@ extension ManagedRuntime {
         // One look before the clock: `--timeout 0` asks "is it free now?".
         repeat {
             let listening = Set((NativeScanner.allListeners() ?? []).map(\.port))
-            busy = busy.intersection(listening)
+            // A port only this user's scan cannot see is still taken: asking the
+            // kernel keeps `wait` from calling another user's server free.
+            busy = busy.filter { listening.contains($0) || PortProbe.isHeld($0) }
             if busy.isEmpty { break }
             if Date() >= deadline { break }
             Thread.sleep(forTimeInterval: 0.2)

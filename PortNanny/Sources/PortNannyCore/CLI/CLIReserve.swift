@@ -36,6 +36,13 @@ public enum CLIReserve {
                                  reasons: [":\(options.port) is in use by \(occupant.processName) (PID \(occupant.pid)); reservations are for free ports. Run `portnanny whois \(options.port)`."],
                                  exitCode: CLIExit.notFound)
         }
+        // A lease on a port someone else already holds promises what cannot be
+        // delivered: the agent's server would fail to bind anyway.
+        if PortProbe.isHeld(options.port) {
+            return ReserveReport(action: "in-use", port: options.port, reservation: nil, occupant: nil,
+                                 reasons: [":\(options.port) is in use by a process PortNanny cannot see, most likely one run by another user or with sudo; reservations are for free ports."],
+                                 exitCode: CLIExit.notFound)
+        }
         let caller = scan.caller
         let renewing = store.reservation(for: options.port)?.isHeld(by: caller) == true
         let lease = Reservation(port: options.port, owner: caller?.name ?? Reservation.currentUser, sessionKey: caller?.sessionKey,

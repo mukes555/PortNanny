@@ -83,6 +83,13 @@ public enum CLIKill {
             if options.orphaned {
                 return finish(&report, action: "no-orphans", exit: CLIExit.ok, text: "No orphaned servers: nothing is left over from an ended agent session.")
             }
+            // The scan cannot see another user's sockets. Saying "nothing is
+            // listening" there sent `free 5432 && start-postgres` straight into
+            // EADDRINUSE, so the kernel gets the last word before a port is free.
+            if options.pid == nil, let port = options.port, PortProbe.isHeld(port) {
+                let text = ":\(port) is in use by a process PortNanny cannot see, most likely one run by another user or with sudo. `sudo lsof -nP -iTCP:\(port) -sTCP:LISTEN` names it."
+                return finish(&report, action: "held-by-unseen", exit: CLIExit.killFailed, text: text, toStderr: true)
+            }
             let what = options.pid.map { "PID \($0) is not listening on any port." } ?? "Nothing is listening on :\(options.port ?? 0)."
             // `free` treats an already-free port as done.
             let exit = options.freeIsSuccess && options.pid == nil ? CLIExit.ok : CLIExit.notFound

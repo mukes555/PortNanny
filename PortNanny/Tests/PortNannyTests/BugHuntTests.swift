@@ -105,6 +105,96 @@ final class BugHuntTests: XCTestCase {
         XCTAssertFalse(Reservation(port: 45012, owner: "x", sessionPid: -1, ttl: 600).isOrphaned())
     }
 
+    // MARK: - A port nobody here can see is not therefore free
+
+    /// A listening socket on `address`, closed when the returned handle dies.
+    private func listen(on address: String, family: Int32) throws -> (fd: Int32, port: Int) {
+        let fd = socket(family, SOCK_STREAM, 0)
+        XCTAssertGreaterThanOrEqual(fd, 0)
+        var reuse: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        if family == AF_INET {
+            var sin = sockaddr_in()
+            sin.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+            sin.sin_family = sa_family_t(AF_INET)
+            inet_pton(AF_INET, address, &sin.sin_addr)
+            _ = withUnsafePointer(to: &sin) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
+        } else {
+            var sin6 = sockaddr_in6()
+            sin6.sin6_len = UInt8(MemoryLayout<sockaddr_in6>.size)
+            sin6.sin6_family = sa_family_t(AF_INET6)
+            inet_pton(AF_INET6, address, &sin6.sin6_addr)
+            var v6only: Int32 = 1
+            setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, socklen_t(MemoryLayout<Int32>.size))
+            _ = withUnsafePointer(to: &sin6) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in6>.size)) } }
+        }
+        XCTAssertEqual(Darwin.listen(fd, 1), 0)
+        return (fd, try XCTUnwrap(localPort(of: fd)))
+    }
+
+    private func localPort(of fd: Int32) -> Int? {
+        var storage = sockaddr_storage()
+        var length = socklen_t(MemoryLayout<sockaddr_storage>.size)
+        let ok = withUnsafeMutablePointer(to: &storage) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &length) } }
+        guard ok == 0 else { return nil }
+        let isIPv6 = storage.ss_family == sa_family_t(AF_INET6)
+        return withUnsafePointer(to: storage) { pointer -> Int in
+            if isIPv6 {
+                return Int(pointer.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { UInt16(bigEndian: $0.pointee.sin6_port) })
+            }
+            return Int(pointer.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { UInt16(bigEndian: $0.pointee.sin_port) })
+        }
+    }
+
+    func testAListenerOnIPv4LoopbackAloneIsSeenAsHeld() throws {
+        let (fd, port) = try listen(on: "127.0.0.1", family: AF_INET)
+        defer { close(fd) }
+        XCTAssertTrue(PortProbe.isHeld(port))
+        XCTAssertFalse(PortProbe.canBind(port))
+    }
+
+    /// The old probe tried only the IPv4 wildcard and never saw this.
+    func testAListenerOnIPv6LoopbackAloneIsSeenAsHeld() throws {
+        let (fd, port) = try listen(on: "::1", family: AF_INET6)
+        defer { close(fd) }
+        XCTAssertTrue(PortProbe.isHeld(port), "a server bound to ::1 only still owns the port")
+        XCTAssertFalse(PortProbe.canBind(port))
+    }
+
+    func testAPortThatWasJustReleasedIsFreeAgain() throws {
+        let (fd, port) = try listen(on: "127.0.0.1", family: AF_INET)
+        close(fd)
+        XCTAssertFalse(PortProbe.isHeld(port))
+        XCTAssertTrue(PortProbe.canBind(port))
+    }
+
+    /// Without SO_REUSEADDR a closed connection's TIME_WAIT failed the bind,
+    /// so `free-port` skipped ports any real server could have taken.
+    func testAPortInTimeWaitIsNotMistakenForAHeldOne() throws {
+        let (listener, port) = try listen(on: "127.0.0.1", family: AF_INET)
+        let client = socket(AF_INET, SOCK_STREAM, 0)
+        var sin = sockaddr_in()
+        sin.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        sin.sin_family = sa_family_t(AF_INET)
+        sin.sin_port = in_port_t(UInt16(port).bigEndian)
+        inet_pton(AF_INET, "127.0.0.1", &sin.sin_addr)
+        _ = withUnsafePointer(to: &sin) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(client, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
+        let accepted = accept(listener, nil, nil)
+        close(accepted)
+        close(listener)
+        usleep(200_000)
+        close(client)
+        XCTAssertFalse(PortProbe.isHeld(port), "TIME_WAIT is not a listener")
+        XCTAssertTrue(PortProbe.canBind(port))
+    }
+
+    func testImpossiblePortsAreNeverHeld() {
+        XCTAssertFalse(PortProbe.isHeld(0))
+        XCTAssertFalse(PortProbe.isHeld(-1))
+        XCTAssertFalse(PortProbe.isHeld(70_000))
+        XCTAssertFalse(PortProbe.canBind(70_000))
+    }
+
     // MARK: - The MCP server stays up
 
     private func reply(_ server: MCPServer, _ line: String) throws -> [String: Any] {
