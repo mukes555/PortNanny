@@ -22,6 +22,9 @@ extension PortManager {
         } else {
             guardedPorts.insert(port)
             watchedPorts.insert(port) // guarding implies watching
+            // The server already on the port is the one being protected. Left
+            // unrecorded, the next scan read it as an intruder and killed it.
+            watchedOccupancy[port] = Self.occupancy(of: port, in: activePorts)
             Notifier.requestPermission()
             showToast("Guarding :\(port)")
         }
@@ -35,8 +38,8 @@ extension PortManager {
             showToast("Stopped watching :\(port)")
         } else {
             watchedPorts.insert(port)
-            // Seed current occupancy so adding a busy port doesn't notify immediately
-            watchedOccupancy[port] = activePorts.first { $0.port == port }?.processName
+            // Seeded so adding a busy port doesn't announce the server already there.
+            watchedOccupancy[port] = Self.occupancy(of: port, in: activePorts)
             Notifier.requestPermission()
             showToast("Watching :\(port)")
         }
@@ -140,6 +143,13 @@ extension PortManager {
     /// a new occupant rather than nothing at all.
     static func occupantIdentity(pid: Int, name: String) -> String { "\(pid) \(name)" }
 
+    /// What a scan records for a watched port. Seeding and scanning must agree
+    /// on the format exactly: a seed of the bare name never matched a scan's
+    /// "pid name", so every newly watched busy port looked newly taken.
+    static func occupancy(of port: Int, in ports: [PortInfo]) -> String? {
+        ports.first { $0.port == port }.map { occupantIdentity(pid: $0.pid, name: $0.processName) }
+    }
+
     /// The name inside an identity, for the text a person reads.
     static func occupantName(_ identity: String) -> String {
         identity.split(separator: " ", maxSplits: 1).last.map(String.init) ?? identity
@@ -153,7 +163,7 @@ extension PortManager {
 
         var current: [Int: String] = [:]
         for port in watchedPorts {
-            current[port] = ports.first { $0.port == port }.map { Self.occupantIdentity(pid: $0.pid, name: $0.processName) }
+            current[port] = Self.occupancy(of: port, in: ports)
         }
 
         // The very first scan just establishes the baseline

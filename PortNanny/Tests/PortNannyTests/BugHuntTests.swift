@@ -80,6 +80,47 @@ final class BugHuntTests: XCTestCase {
                        "only the unreadable entry is lost; the next kill used to save itself over everything")
     }
 
+    // MARK: - Every process shares one History
+
+    /// Each `portnanny free` and MCP `kill_port` builds its own store. It assumed
+    /// the default limit, so one agent kill cut a History of 500 down to 50.
+    func testAnAgentKillKeepsTheHistoryLengthThePersonChose() throws {
+        let (defaults, suite) = freshDefaults()
+        defaults.set(500, forKey: DefaultsKey.historyLimit)
+        let app = HistoryManager(defaults: defaults, lockName: suite)
+        app.maxHistoryItems = 500
+        for port in 1...120 {
+            app.addEntry(port: port, processName: "node", action: .killed)
+        }
+
+        let agentProcess = HistoryManager(defaults: defaults, lockName: suite)
+        agentProcess.addEntry(port: 45019, processName: "vite", action: .killed, killedBy: "Claude Code")
+
+        XCTAssertEqual(HistoryManager(defaults: defaults, lockName: suite).history.count, 121)
+    }
+
+    /// A stored limit outside what Settings offers is ignored, as the app does.
+    func testAnImpossibleStoredHistoryLimitFallsBackToTheDefault() throws {
+        let (defaults, suite) = freshDefaults()
+        defaults.set(3, forKey: DefaultsKey.historyLimit)
+        XCTAssertEqual(HistoryManager(defaults: defaults, lockName: suite).maxHistoryItems, HistoryManager.defaultLimit)
+        defaults.set("lots", forKey: DefaultsKey.historyLimit)
+        XCTAssertEqual(HistoryManager(defaults: defaults, lockName: suite).maxHistoryItems, HistoryManager.defaultLimit)
+    }
+
+    /// Changing the limit in Settings saved the app's own copy of History,
+    /// dropping every kill an agent had recorded since the app last read it.
+    func testChangingTheLimitKeepsKillsAnotherProcessRecorded() throws {
+        let (defaults, suite) = freshDefaults()
+        let app = HistoryManager(defaults: defaults, lockName: suite)
+        let agentProcess = HistoryManager(defaults: defaults, lockName: suite)
+        agentProcess.addEntry(port: 45019, processName: "vite", action: .killed, killedBy: "Codex")
+
+        app.maxHistoryItems = 100
+
+        XCTAssertEqual(HistoryManager(defaults: defaults, lockName: suite).history.map(\.port), [45019])
+    }
+
     // MARK: - Pids from untrusted places
 
     /// `CLAUDE_PID=9999999999 portnanny whoami` trapped narrowing to Int32.

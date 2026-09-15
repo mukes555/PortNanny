@@ -256,7 +256,7 @@ public class PortManager: ObservableObject {
     }
 
     /// How many kills the History window keeps.
-    @Published public var historyLimit: Int = 50 {
+    @Published public var historyLimit: Int = HistoryManager.defaultLimit {
         didSet {
             history.maxHistoryItems = historyLimit
             guard !isRestoringPreferences else { return }
@@ -284,7 +284,7 @@ public class PortManager: ObservableObject {
         }
     }
 
-    /// Occupancy of watched ports at the previous scan (port -> process name).
+    /// Occupancy of watched ports at the previous scan, as `occupancy(of:in:)` writes it.
     public var watchedOccupancy: [Int: String] = [:]
 
     /// One-shot "tell me when this frees up" armed when a kill didn't finish
@@ -354,9 +354,7 @@ public class PortManager: ObservableObject {
         }
         Policy.refusesUnclaimedServers = guardRefusesUnclaimed
         Policy.defaultLeaseTTL = leaseDefaultTTL
-        if let stored = defaults.object(forKey: DefaultsKey.historyLimit) as? Int, (10...1000).contains(stored) {
-            historyLimit = stored
-        }
+        historyLimit = HistoryManager.storedLimit(in: defaults)
         if let stored = defaults.array(forKey: DefaultsKey.guardedPorts) as? [Int] {
             // A guard only makes sense on a watched port; the invariant is
             // enforced on writes, so re-establish it for whatever was stored.
@@ -414,7 +412,7 @@ public class PortManager: ObservableObject {
         includePrereleases = false
         guardRefusesUnclaimed = true
         leaseDefaultTTL = Reservation.defaultTTL
-        historyLimit = 50
+        historyLimit = HistoryManager.defaultLimit
         protectedProcessSubstrings = Self.defaultProtectedProcessSubstrings
         watchedPorts = []
         guardedPorts = []

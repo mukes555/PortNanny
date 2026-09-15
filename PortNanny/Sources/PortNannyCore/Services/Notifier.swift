@@ -37,7 +37,9 @@ public enum Notifier {
     /// Registers the refusal category so its buttons appear; call once at launch.
     public static func registerCategories() {
         guard isAvailable else { return }
-        let stop = UNNotificationAction(identifier: stopAnywayAction, title: "Stop it anyway", options: [.destructive])
+        // .foreground: the confirmation this action opens belongs in front of
+        // whatever the person is using, not behind it.
+        let stop = UNNotificationAction(identifier: stopAnywayAction, title: "Stop it anyway", options: [.destructive, .foreground])
         let show = UNNotificationAction(identifier: showAction, title: "Show in PortNanny", options: [.foreground])
         let category = UNNotificationCategory(identifier: refusalCategory, actions: [stop, show], intentIdentifiers: [], options: [])
         UNUserNotificationCenter.current().setNotificationCategories([category])
@@ -55,7 +57,7 @@ public enum Notifier {
         content.sound = sound ? .default : nil
         content.categoryIdentifier = refusalCategory
         content.userInfo = payload.userInfo
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "refusal-\(payload.port)", content: content, trigger: nil))
+        post(UNNotificationRequest(identifier: "refusal-\(payload.port)", content: content, trigger: nil))
     }
 
     public static func send(title: String, body: String, sound: Bool = true) {
@@ -66,11 +68,28 @@ public enum Notifier {
         content.body = body
         content.sound = sound ? .default : nil
 
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
-        )
-        UNUserNotificationCenter.current().add(request)
+        post(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+    }
+
+    /// Posts a notification, asking for permission first if that has never
+    /// happened. Watch, Guard and the Settings switch ask when the person
+    /// opts in, but a refusal banner and a watchlist carried over from
+    /// PortKilla reach here with the question never put, and macOS drops
+    /// everything an unauthorized app sends: those banners never appeared.
+    private static func post(_ request: UNNotificationRequest) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                    guard granted else { return }
+                    center.add(request)
+                }
+            case .denied:
+                return
+            default:
+                center.add(request)
+            }
+        }
     }
 }

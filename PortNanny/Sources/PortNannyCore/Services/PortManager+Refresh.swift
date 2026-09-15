@@ -47,14 +47,16 @@ extension PortManager {
             return
         }
 
-        let timer = Timer.scheduledTimer(
-            withTimeInterval: interval,
-            repeats: true
-        ) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             self?.refresh()
         }
         // Let macOS coalesce wakeups for power efficiency.
         timer.tolerance = interval * 0.1
+        // Common modes, not the default one: a kill confirmation or an open
+        // menu runs its own run loop mode, and the default-mode timer stopped
+        // there. Scanning stopped with it, so a guard watched nothing for as
+        // long as a dialog stood open.
+        RunLoop.main.add(timer, forMode: .common)
         refreshTimer = timer
 
         if refreshNow {

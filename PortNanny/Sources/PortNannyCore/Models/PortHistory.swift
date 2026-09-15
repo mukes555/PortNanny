@@ -87,9 +87,18 @@ public final class HistoryManager: ObservableObject {
         (history + refusals).sorted { $0.timestamp > $1.timestamp }
     }
 
+    public static let defaultLimit = 50
+    /// The lengths a stored History preference may have; anything else is ignored.
+    public static let limitRange = 10...1000
+
     /// Set from the History preference; trimming applies immediately.
-    public var maxHistoryItems = 50 {
-        didSet { trimAndSave() }
+    public var maxHistoryItems = HistoryManager.defaultLimit {
+        // Re-read first: this copy may be older than kills an agent has
+        // recorded since, and saving it as it was would drop them.
+        didSet {
+            guard maxHistoryItems != oldValue else { return }
+            lock.withLock { loadHistory(); trimAndSave() }
+        }
     }
 
     /// `lockName` defaults to the shared domain, so the app's `.shared` store
@@ -98,7 +107,19 @@ public final class HistoryManager: ObservableObject {
     public init(defaults: UserDefaults = .standard, lockName: String = HistoryManager.appSuiteName) {
         self.defaults = defaults
         self.lock = SharedStore.Lock(name: "\(lockName)-history")
+        // Every CLI and MCP process trims on write too. Assuming the default
+        // there cut a History of 500 down to 50 on the first agent kill.
+        maxHistoryItems = Self.storedLimit(in: defaults)
         loadHistory()
+    }
+
+    /// The History preference as Settings saved it, or the default when it is
+    /// missing or not a length Settings could have saved.
+    public static func storedLimit(in defaults: UserDefaults) -> Int {
+        guard let stored = defaults.object(forKey: DefaultsKey.historyLimit) as? Int, limitRange.contains(stored) else {
+            return defaultLimit
+        }
+        return stored
     }
 
     public func addEntry(port: Int, processName: String, action: PortHistoryItem.HistoryAction,
