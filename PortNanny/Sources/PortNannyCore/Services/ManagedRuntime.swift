@@ -163,6 +163,12 @@ extension ManagedRuntime {
         while let next = current, next > 1, !seen.contains(next), chain.count < ancestorsConsidered {
             seen.insert(next)
             let name = processes.name(for: next) ?? "?"
+            // tmux, screen and sshd are where the session ends, not supervisors
+            // of what runs inside it. A tmux server keeps the argv of the
+            // command that opened the session, so `tmux new -s build tsc
+            // --watch` read as a reloader: killing one supervised port then
+            // took the whole tmux server down, every pane and editor with it.
+            if AgentSignatures.attributionBarriers.contains(name) { break }
             let command = processes.command(for: next) ?? ""
             let ppid = processes.ppid(for: next) ?? 0
             let lower = command.lowercased()

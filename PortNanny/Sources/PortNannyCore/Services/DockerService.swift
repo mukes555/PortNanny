@@ -132,14 +132,26 @@ public final class DockerService {
                 let publicPart = mapping[..<rangeArrow.lowerBound] // "0.0.0.0:5432" or ":::5432"
 
                 guard let lastColon = publicPart.lastIndex(of: ":") else { continue }
-                let portStr = publicPart[publicPart.index(after: lastColon)...]
-                if let port = Int(portStr) {
+                for port in publishedPorts(String(publicPart[publicPart.index(after: lastColon)...])) {
                     map[port] = containerName
                 }
             }
         }
 
         return map
+    }
+
+    /// The ports one published mapping names. Compose publishes ranges
+    /// ("0.0.0.0:3000-3005->3000-3005/tcp"), and reading only a single number
+    /// dropped the whole container: no name in `whois`, no `docker stop` offer
+    /// from `kill`. Capped, so a container publishing thousands of ports
+    /// cannot fill the map.
+    static func publishedPorts(_ text: String) -> [Int] {
+        if let port = Int(text) { return PortManager.isValidPortNumber(port) ? [port] : [] }
+        let ends = text.split(separator: "-", maxSplits: 1).map(String.init)
+        guard ends.count == 2, let first = Int(ends[0]), let last = Int(ends[1]), first <= last,
+              PortManager.isValidPortNumber(first), PortManager.isValidPortNumber(last) else { return [] }
+        return Array(first...min(last, first + 255))
     }
 
     public func stopContainer(name: String) throws {

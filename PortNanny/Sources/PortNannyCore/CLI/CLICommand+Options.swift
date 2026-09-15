@@ -55,6 +55,8 @@ extension CLICommand {
         var range: ClosedRange<Int> = 3000...3999
         /// True once --range was typed, so --prefer stops moving it.
         var rangeWasGiven = false
+        /// And the other way round: a range alone moves the preferred port.
+        var preferWasGiven = false
         var reserve = true
         var owner: String?
         var session: String?

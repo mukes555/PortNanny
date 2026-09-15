@@ -212,11 +212,13 @@ extension CLIArguments {
     names, PORTKILLA_OWNER and PORTKILLA_SESSION, are read too.
 
     Exit codes: 0 done, 1 nothing listening, 2 usage, 3 refused (another
-    agent's live session owns it, or nobody claims it), 4 kill failed,
-    5 still running after the wait, 6 managed (a supervisor would undo the
-    kill; the stop command is printed), 70 internal error. --dry-run exits
-    0 when it would kill and 3 when it would refuse. `portnanny help
-    <command>` or `<command> --help` for more.
+    agent's live session owns it, or nobody claims it), 4 kill failed (or
+    only some of several ports), 5 still running after the wait, 6 managed
+    (a supervisor would undo the kill; the stop command is printed),
+    70 internal error, 73 a lease or history entry could not be written,
+    126 exec could not start the command, 127 exec could not find it.
+    --dry-run exits 0 when it would kill and 3 when it would refuse.
+    `portnanny help <command>` or `<command> --help` for more.
 
     The GUI launches when run with no arguments.
     """

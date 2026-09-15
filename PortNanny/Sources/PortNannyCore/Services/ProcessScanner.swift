@@ -26,7 +26,8 @@ public class ProcessScanner {
     public func scanTestProcesses(processes: ProcessTable) -> [TestProcessInfo] {
         processes.allEntries
             .compactMap { entry -> TestProcessInfo? in
-                guard let info = makeTestInfo(pid: entry.pid, memoryKb: entry.rssKB, command: entry.command, cpuPercent: entry.cpuPercent) else { return nil }
+                guard let info = makeTestInfo(pid: entry.pid, memoryKb: entry.rssKB, command: entry.command,
+                                              cpuPercent: entry.cpuPercent, name: entry.name) else { return nil }
                 return info.withOwner(AgentAttribution.owner(ofPid: entry.pid, in: processes))
             }
             .sorted { $0.pid < $1.pid }
@@ -53,12 +54,16 @@ public class ProcessScanner {
         return processes
     }
 
-    private func makeTestInfo(pid: Int, memoryKb: Int, command: String, cpuPercent: Double = 0) -> TestProcessInfo? {
+    /// `name` is the kernel's, whenever the caller has it. Taking it from the
+    /// command splits on the first space, so a test worker under
+    /// "~/Library/Application Support/fnm/…/node" was called "Application" and
+    /// its kill was refused: "PID 42 now belongs to 'node'".
+    private func makeTestInfo(pid: Int, memoryKb: Int, command: String, cpuPercent: Double = 0, name: String? = nil) -> TestProcessInfo? {
         guard let type = determineTestType(command: command) else { return nil }
 
         return TestProcessInfo(
             pid: pid,
-            processName: extractProcessName(from: command),
+            processName: name ?? extractProcessName(from: command),
             command: CommandRedaction.redact(command),
             memoryUsage: MemoryFormat.string(kilobytes: memoryKb),
             memorySizeKB: memoryKb,

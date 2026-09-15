@@ -121,6 +121,96 @@ final class BugHuntTests: XCTestCase {
         XCTAssertEqual(HistoryManager(defaults: defaults, lockName: suite).history.map(\.port), [45019])
     }
 
+    // MARK: - Command lines a process chose itself
+
+    /// Redaction runs on every listener of every scan. The key patterns used
+    /// to backtrack over every way of splitting a run of word characters, so
+    /// one process with a long argument froze the menu bar, the CLI and the
+    /// guard: 800 characters took 2.6s, a few kilobytes took minutes.
+    func testALongArgumentDoesNotStallRedaction() {
+        let hostile = "node --serve " + String(repeating: "token", count: 2000) + " --port 3000"
+        let started = Date()
+        _ = CommandRedaction.redact(hostile)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 1.0, "10 KB of one word must not take a second")
+    }
+
+    func testALongArgumentDoesNotHideASecretAfterIt() {
+        let hostile = "node " + String(repeating: "token", count: 2000) + " --api-key=sk-live-9"
+        XCTAssertFalse(CommandRedaction.redact(hostile).contains("sk-live-9"))
+    }
+
+    /// "\r\n" is one Swift Character of two scalars, and the sanitizer used
+    /// to pass any multi-scalar character through untouched: a process could
+    /// name itself so that `portnanny list` printed an extra row.
+    func testACarriageReturnInAProcessNameIsNeutralised() {
+        let spoofed = CommandRedaction.printable("node\r\n3000  evil  1 MB")
+        XCTAssertFalse(spoofed.contains("\r"))
+        XCTAssertFalse(spoofed.contains("\n"))
+        XCTAssertTrue(spoofed.hasPrefix("node"))
+        XCTAssertEqual(CommandRedaction.printable("vite ⚡️ dev"), "vite ⚡️ dev", "only control characters go")
+    }
+
+    // MARK: - Arguments, leases and links
+
+    /// `--range` on its own is in the help text and in the agent docs, and it
+    /// was rejected: the preferred port nobody had asked for was still 3000,
+    /// outside the range.
+    func testARangeOnItsOwnMovesThePreferredPortIntoIt() {
+        guard case .success(.freePort(let prefer, let range, _))? = CLIArguments.parse(["free-port", "--range", "5000-5999"]) else {
+            return XCTFail("`free-port --range 5000-5999` was rejected")
+        }
+        XCTAssertEqual(range, 5000...5999)
+        XCTAssertEqual(prefer, 5000)
+
+        guard case .success(.exec(let options))? = CLIArguments.parse(["exec", "--range", "5000-5999", "--", "npm", "run", "dev"]) else {
+            return XCTFail("`exec --range 5000-5999` was rejected")
+        }
+        XCTAssertEqual(options.range, 5000...5999)
+        XCTAssertEqual(options.prefer, 5000)
+    }
+
+    func testAPreferredPortStillWinsAndStillHasToBeInTheRange() {
+        guard case .success(.freePort(let prefer, _, _))? = CLIArguments.parse(["free-port", "--range", "5000-5999", "--prefer", "5500"]) else {
+            return XCTFail("a preferred port inside the range is fine")
+        }
+        XCTAssertEqual(prefer, 5500)
+        guard case .failure? = CLIArguments.parse(["free-port", "--range", "5000-5999", "--prefer", "9000"]) else {
+            return XCTFail("a preferred port outside the range is the person's mistake, and is still reported")
+        }
+    }
+
+    /// The lease reason is shown by `reservations` and `whois`, and quoted
+    /// back to other agents in the refusal they get.
+    func testALeaseReasonDoesNotCarryASecret() {
+        let lease = Reservation(port: 45019, owner: "Claude Code", reason: "exec: node --token=sk-live-9 server.js")
+        XCTAssertNotNil(lease.reason)
+        XCTAssertFalse(lease.reason?.contains("sk-live-9") ?? true)
+    }
+
+    func testAKillLinkActsOnTheOnlyPortItNames() {
+        XCTAssertEqual(URLCommand.parse(URL(string: "portnanny://kill/3000")!), .kill(port: 3000, force: false))
+        XCTAssertNil(URLCommand.parse(URL(string: "portnanny://kill/9999/3000")!), "it reads as :9999 and used to kill :3000")
+        XCTAssertNil(URLCommand.parse(URL(string: "portnanny://kill/abc/3000")!))
+    }
+
+    // MARK: - Who is still running
+
+    /// An npm or pip install runs the agent through an interpreter, so its
+    /// processes are called "node" or "python3". Nothing matched them, the
+    /// live session read as ended, and `kill --orphaned` (advertised as safe
+    /// for anyone) would then reap that agent's running server.
+    func testAnAgentInstalledThroughNpmOrPipIsStillRecognised() {
+        XCTAssertEqual(AgentAttribution.match(command: "/usr/local/bin/gemini --yolo", executableName: "gemini")?.name, "Gemini CLI")
+        XCTAssertEqual(AgentAttribution.match(command: "node /usr/local/bin/gemini --yolo", executableName: "node")?.name, "Gemini CLI")
+        XCTAssertEqual(AgentAttribution.match(command: "python3 /Users/me/.local/bin/aider", executableName: "python3")?.name, "Aider")
+        XCTAssertEqual(AgentAttribution.match(command: "node /opt/homebrew/bin/copilot", executableName: "node")?.name, "Copilot CLI")
+    }
+
+    func testAProjectNamedAfterAnAgentIsNotThatAgent() {
+        XCTAssertNil(AgentAttribution.match(command: "node /Users/me/projects/gemini/server.js", executableName: "node"))
+        XCTAssertNil(AgentAttribution.match(command: "node server.js", executableName: "node"))
+    }
+
     // MARK: - Pids from untrusted places
 
     /// `CLAUDE_PID=9999999999 portnanny whoami` trapped narrowing to Int32.

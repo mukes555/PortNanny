@@ -20,6 +20,27 @@ final class ManagedRuntimeTests: XCTestCase {
 
     // MARK: - Reloaders
 
+    /// A tmux server keeps the argv of the command that opened the session,
+    /// so `tmux new -s build tsc --watch` matched the watch-mode signature.
+    /// `kill 3000` then planned a tree kill from tmux down: every pane in the
+    /// session, the person's editor and any other server in it.
+    func testTmuxIsWhereTheAncestorWalkStops() {
+        let session = table([
+            (100, 1, "tmux new -s build tsc --watch"),
+            (200, 100, "/bin/zsh"),
+            (300, 200, "node server.js"),
+        ])
+        XCTAssertNil(detect(300, in: session), "tmux supervises a session, not the server inside it")
+
+        let nodemonInsideTmux = table([
+            (100, 1, "tmux new -s build"),
+            (200, 100, "/bin/zsh"),
+            (250, 200, "node /usr/local/bin/nodemon server.js"),
+            (300, 250, "node server.js"),
+        ])
+        XCTAssertEqual(detect(300, in: nodemonInsideTmux)?.name, "nodemon", "a real supervisor below tmux is still found")
+    }
+
     /// End-to-end testing found `portnanny kill` on a Docker-published port
     /// answering "a container `docker ps` can name" and stopping nothing,
     /// because it scanned without asking for container names and so never

@@ -25,7 +25,10 @@ public struct Reservation: Codable, Equatable, Identifiable {
         self.owner = owner
         self.sessionKey = sessionKey
         self.sessionPid = sessionPid
-        self.reason = reason.map { CommandRedaction.printable(String($0.prefix(200))) }
+        // Redacted first, then cut: `--token=…` in a lease reason is shown
+        // by `reservations` and `whois`, and quoted back to other agents in
+        // the refusal they get. Cutting first could leave half a secret.
+        self.reason = reason.map { CommandRedaction.printable(String(CommandRedaction.redact($0).prefix(200))) }
         self.createdAt = createdAt
         self.expiresAt = createdAt.addingTimeInterval(min(max(ttl, 1), Reservation.maxTTL))
     }

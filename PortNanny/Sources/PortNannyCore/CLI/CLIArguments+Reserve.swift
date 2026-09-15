@@ -106,6 +106,7 @@ extension CLIArguments {
         case "--prefer":
             guard let port = Int(value), PortManager.isValidPortNumber(port) else { return .invalidNumber(value, option: option) }
             options.prefer = port
+            options.preferWasGiven = true
             // --prefer shifts the default window; an explicit --range wins,
             // even when the caller typed the default.
             if !options.rangeWasGiven { options.range = port...min(port + 999, 65535) }
@@ -113,6 +114,9 @@ extension CLIArguments {
             guard let range = parseRange(value) else { return .invalidNumber(value, option: option) }
             options.range = range
             options.rangeWasGiven = true
+            // A range on its own moves the preferred port into it; the
+            // default of 3000 used to reject `--range 5000-5999` outright.
+            if !options.preferWasGiven { options.prefer = range.lowerBound }
         case "--owner":
             options.owner = value
         case "--session":

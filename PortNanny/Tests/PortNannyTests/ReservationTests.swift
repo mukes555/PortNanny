@@ -126,6 +126,7 @@ final class ReservationTests: XCTestCase {
         XCTAssertEqual(CLIArguments.parse(["exec", "--port", "3000", "--", "npm", "run", "dev"]), .success(.exec(exec)))
         var free = CLICommand.ExecOptions()
         free.prefer = 8000
+        free.preferWasGiven = true
         free.range = 8000...8999
         free.reserve = false
         free.owner = "bot"
