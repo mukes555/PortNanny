@@ -193,12 +193,18 @@ extension PortManager {
                                 body: "'\(intruder.processName)' keeps coming back. Stop it at the source, then re-enable the guard."
                             )
                         } else {
+                            // The banner said "Auto-killing" before anything
+                            // was signalled, and a kill that failed was never
+                            // mentioned at all: the person was told a port had
+                            // been cleared while the intruder kept it.
                             notify(
                                 .guardKill,
                                 title: "Guard on :\(event.port)",
-                                body: "Auto-killing '\(intruder.processName)': it grabbed a guarded port."
+                                body: "Stopping '\(intruder.processName)': it took a guarded port."
                             )
-                            killPort(intruder, initiator: .portGuard)
+                            killPort(intruder, initiator: .portGuard) { [weak self] problem in
+                                self?.notify(.guardKill, title: "Guard on :\(event.port) could not stop it", body: problem)
+                            }
                         }
                     } else {
                         notify(.portTaken, title: ":\(event.port) is in use", body: "'\(name)' started listening on :\(event.port).")

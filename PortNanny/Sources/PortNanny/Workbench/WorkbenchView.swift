@@ -52,7 +52,11 @@ struct WorkbenchView: View {
                 .navigationSplitViewColumnWidth(min: 700, ideal: 820)
         } detail: {
             if let port = selectedPort {
+                // Keyed by the port: selecting another one builds a fresh
+                // inspector, so a slow peek or ancestry walk for the previous
+                // port cannot land in the new one's panel.
                 WorkbenchInspector(port: port, portManager: portManager)
+                    .id(port.id)
             } else {
                 inspectorPlaceholder
             }
@@ -60,6 +64,7 @@ struct WorkbenchView: View {
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1220, minHeight: 600)
         .background(Color(nsColor: .windowBackgroundColor))
+        .showsFeedback(from: portManager)
     }
 
     /// Note for screenshots: this column is composited by the window server

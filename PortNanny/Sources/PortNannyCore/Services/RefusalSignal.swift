@@ -36,3 +36,15 @@ public enum RefusalSignal {
         DistributedNotificationCenter.default().postNotificationName(name, object: nil, userInfo: payload.userInfo, deliverImmediately: true)
     }
 }
+
+/// "Show the port list", from one PortNanny process to the one already
+/// running. A second copy (opened from a mounted DMG next to the one in
+/// Applications) would otherwise sit in the menu bar beside the first, kill
+/// twice on every guard, and notify twice for every watch.
+public enum ShowSignal {
+    public static let name = Notification.Name("com.mukes555.PortNanny.show")
+
+    public static func post() {
+        DistributedNotificationCenter.default().postNotificationName(name, object: nil, userInfo: nil, deliverImmediately: true)
+    }
+}

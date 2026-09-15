@@ -50,6 +50,9 @@ extension CLIKill {
 
         guard var argv = managed.stopArguments(force: force), let text = managed.stopCommand(force: force) else {
             if managed.kind == .docker {
+                guard !DockerService.shared.lastLookupFailed else {
+                    return .plain(target, blocked: "\(subject) is published by Docker, but `docker ps` did not answer, so PortNanny cannot name the container to stop. Check that Docker is running, then try again.")
+                }
                 return .plain(target, blocked: "\(subject) is published by Docker Desktop for a container `docker ps` can name; PortNanny does not kill Docker itself.")
             }
             return .plain(target, blocked: "\(subject) is managed by \(managed.label) and \(managed.consequence). Pass --force to kill it anyway.")
@@ -74,6 +77,9 @@ extension CLIKill {
         var failures: [String] = []
         var signalled: [Plan] = []
         var commanded: [Plan] = []
+        /// Plans whose process had already exited: the port is free, but
+        /// History must not record a kill that never happened.
+        var alreadyGone: Set<Int> = []
         for plan in plans {
             if let command = plan.command {
                 do {
@@ -86,8 +92,15 @@ extension CLIKill {
                 continue
             }
             do {
-                try killer.killProcess(pid: plan.signalPid, force: options.force, killTree: plan.killTree, expectedName: plan.signalName)
+                let outcome = try killer.killProcess(pid: plan.signalPid, force: options.force, killTree: plan.killTree, expectedName: plan.signalName)
                 signalled.append(plan)
+                if !outcome.signalled { alreadyGone.insert(plan.signalPid) }
+                // A tree kill that leaves children behind is why the port can
+                // stay busy; those errors used to be dropped silently.
+                if !outcome.childrenNotKilled.isEmpty {
+                    let pids = outcome.childrenNotKilled.map(String.init).joined(separator: ", ")
+                    failures.append("\(plan.signalName) (PID \(plan.signalPid)): could not stop its child process\(outcome.childrenNotKilled.count == 1 ? "" : "es") \(pids)")
+                }
                 if plan.signalPid != plan.target.pid {
                     report.stoppedVia.append("\(plan.signalName) (PID \(plan.signalPid))")
                 }
@@ -104,11 +117,19 @@ extension CLIKill {
 
         let killed = signalled.filter { !stillRunning.contains($0.signalPid) && !stillRunning.contains($0.target.pid) }
         let stopped = commanded.filter { !stillListening.contains($0.target.port) }
-        record(killed + stopped, report: report)
+        record(killed.filter { !alreadyGone.contains($0.signalPid) } + stopped, report: report)
+
+        // `free` promises a free port, not a dead process. A supervisor can
+        // put a new server on the port within milliseconds of the old one
+        // dying, and `free 3000 && npm start` then hit EADDRINUSE anyway.
+        let takenAgain = options.freeIsSuccess ? (killed + stopped).map(\.target.port).filter(PortProbe.isHeld) : []
 
         var lines = killed.map { plan -> String in
             let target = plan.target
             let leftover = options.orphaned ? " (\(target.agentOwner?.label ?? "orphaned"))" : ""
+            if alreadyGone.contains(plan.signalPid) {
+                return "\(plan.signalName) (PID \(plan.signalPid)) had already exited; :\(target.port) is free."
+            }
             if plan.signalPid != target.pid {
                 let also = plan.alsoStops.isEmpty ? "" : " and " + plan.alsoStops.map { ":\($0.port)" }.joined(separator: ", ")
                 return "Stopped \(plan.signalName) (PID \(plan.signalPid)), and with it \(target.processName) (PID \(target.pid)) on :\(target.port)\(also)."
@@ -120,6 +141,7 @@ extension CLIKill {
             .map { "\($0.target.processName) (PID \($0.target.pid)) is still running. Try --force." }
         lines += commanded.filter { stillListening.contains($0.target.port) }
             .map { ":\($0.target.port) is still in use after `\($0.commandText ?? "")`." }
+        lines += takenAgain.map { ":\($0) is in use again already; something restarted it." }
         lines += failures.map { "Failed to kill \($0)" }
         report.reasons += failures
 
@@ -127,7 +149,13 @@ extension CLIKill {
         if signalled.isEmpty && commanded.isEmpty {
             return finish(&report, action: "failed", exit: CLIExit.killFailed, text: text, toStderr: true)
         }
-        if !stillRunning.isEmpty || !stillListening.isEmpty {
+        // Some died and some did not. This used to exit 0 as "killed", so a
+        // script that killed three ports and checked the status carried on
+        // with one of them still listening.
+        if !failures.isEmpty {
+            return finish(&report, action: "partial", exit: CLIExit.killFailed, text: text, toStderr: true)
+        }
+        if !stillRunning.isEmpty || !stillListening.isEmpty || !takenAgain.isEmpty {
             return finish(&report, action: "still-running", exit: CLIExit.stillRunning, text: text)
         }
         let action = signalled.isEmpty ? "stopped" : "killed"

@@ -76,13 +76,26 @@ extension AppDelegate {
         portManager.setUIVisible(true)
     }
 
+    /// A closed window is let go of, not kept: SwiftUI kept re-rendering the
+    /// Workbench's sparklines on every scan for the rest of the session.
+    /// Position and size come back from the frame autosave.
     func windowWillClose(_ notification: Notification) {
         let closing = notification.object as? NSWindow
         if closing === workbenchWindow {
+            workbenchWindow = nil
             portManager.setUIVisible(popover.isShown || isPinned)
             return
         }
+        if closing === settingsWindow {
+            settingsWindow = nil
+            return
+        }
+        if closing === historyWindow {
+            historyWindow = nil
+            return
+        }
         if closing === tourWindow {
+            tourWindow = nil
             // Closing the tour any other way used to leave a first-time user
             // with nothing on screen and an app they could not find.
             DispatchQueue.main.async { [weak self] in self?.revealPorts() }
@@ -201,6 +214,7 @@ extension AppDelegate {
             window.isReleasedWhenClosed = false
             window.contentViewController = NSHostingController(rootView: view)
             window.center()
+            window.delegate = self
             settingsWindow = window
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -209,6 +223,9 @@ extension AppDelegate {
     }
 
     func showHistory() {
+        // The popover floats above ordinary windows, so History opened
+        // underneath it and looked like nothing had happened.
+        popover.performClose(nil)
         if historyWindow == nil {
             let historyView = HistoryView(portManager: portManager)
             historyWindow = NSWindow(
@@ -221,6 +238,7 @@ extension AppDelegate {
             historyWindow?.title = "PortNanny History"
             historyWindow?.contentViewController = NSHostingController(rootView: historyView)
             historyWindow?.isReleasedWhenClosed = false
+            historyWindow?.delegate = self
         }
 
         historyWindow?.makeKeyAndOrderFront(nil)

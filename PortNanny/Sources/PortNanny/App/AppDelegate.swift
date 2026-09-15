@@ -52,6 +52,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             exit(exitCode)
         }
 
+        // LaunchServices only stops a second instance of the same bundle
+        // path: the copy on a mounted DMG and the one in Applications both
+        // run happily, and then every guard kills twice and ⌥⌘P toggles
+        // whichever answers first. Hand the person the one already running.
+        if anotherInstanceIsRunning {
+            ShowSignal.post()
+            exit(0)
+        }
+
         // PortKilla's preferences come along on the first run under the new name.
         if preferenceDefaults === UserDefaults.standard { PreferencesMigration.run() }
         let app = NSApplication.shared
@@ -102,6 +111,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         // A refusal the CLI issues to an agent becomes a notification here.
         refusalWatcher = RefusalWatcher(portManager: portManager) { [weak self] in self?.revealPorts() }
 
+        // A second copy someone opened asks this one to show itself.
+        DistributedNotificationCenter.default().addObserver(
+            forName: ShowSignal.name, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.revealPorts()
+        }
+
         // First launch: the tour, then the popover, so the app does not
         // silently vanish into the menu bar. An upgrade skips the tour (it
         // stays in the menu) but still sees the popover once per install.
@@ -126,6 +142,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         #if DEBUG
         installDevHooks()
         #endif
+    }
+
+    /// True when another PortNanny process is already up. Debug and scripted
+    /// runs have no bundle identifier, so they are never counted.
+    private static var anotherInstanceIsRunning: Bool {
+        guard let identifier = Bundle.main.bundleIdentifier else { return false }
+        let mine = NSRunningApplication.current.processIdentifier
+        return NSRunningApplication.runningApplications(withBundleIdentifier: identifier)
+            .contains { $0.processIdentifier != mine }
     }
 
     /// A `portnanny://show` that arrived while the app was still launching.

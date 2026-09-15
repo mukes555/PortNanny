@@ -19,6 +19,7 @@ extension PortManager {
     /// Call from `defer`: stops any timer and deletes the throwaway suite.
     func discardTestDefaults() {
         stopAutoRefresh()
+        updateTimer?.invalidate()
         if let suite = Self.suiteNames.removeValue(forKey: ObjectIdentifier(self)) {
             UserDefaults.discardSuite(named: suite, defaults: defaults)
         }

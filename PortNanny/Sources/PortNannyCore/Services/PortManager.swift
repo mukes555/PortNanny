@@ -63,6 +63,8 @@ public class PortManager: ObservableObject {
     public let processScanner = ProcessScanner()
     public let killer = ProcessKiller()
     public var refreshTimer: Timer?
+    /// Hourly "is there a new version?"; see `startUpdateChecks`.
+    public var updateTimer: Timer?
     /// Set by the debug render hooks: the ports come from scripted data and
     /// a refresh must not replace them with real ones.
     public private(set) var usesDemoData = false
@@ -233,7 +235,13 @@ public class PortManager: ObservableObject {
         }
     }
 
-    @Published public var autoUpdateCheck = true { didSet { persist(autoUpdateCheck, DefaultsKey.autoUpdateCheck) } }
+    @Published public var autoUpdateCheck = true {
+        didSet {
+            persist(autoUpdateCheck, DefaultsKey.autoUpdateCheck)
+            guard !isRestoringPreferences else { return }
+            startUpdateChecks()
+        }
+    }
     @Published public var includePrereleases = false { didSet { persist(includePrereleases, DefaultsKey.includePrereleases) } }
 
     // Policy the CLI follows too; see `Policy`.
@@ -379,6 +387,7 @@ public class PortManager: ObservableObject {
                     self?.checkForUpdates(manual: false)
                 }
             }
+            startUpdateChecks()
         }
     }
 

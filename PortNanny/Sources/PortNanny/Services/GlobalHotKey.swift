@@ -29,6 +29,21 @@ final class GlobalHotKey {
         return carbon
     }
 
+    /// Whether macOS has already claimed this combination (Spotlight,
+    /// Mission Control, input switching). Registering one of those succeeds
+    /// and then never fires, so it has to be refused here instead.
+    static func isTakenBySystem(keyCode: UInt32, carbonModifiers: UInt32) -> Bool {
+        var unmanaged: Unmanaged<CFArray>?
+        guard CopySymbolicHotKeys(&unmanaged) == noErr,
+              let entries = unmanaged?.takeRetainedValue() as? [[String: Any]] else { return false }
+        return entries.contains { entry in
+            guard entry[kHISymbolicHotKeyEnabled as String] as? Bool == true,
+                  let code = (entry[kHISymbolicHotKeyCode as String] as? NSNumber)?.uint32Value,
+                  let modifiers = (entry[kHISymbolicHotKeyModifiers as String] as? NSNumber)?.uint32Value else { return false }
+            return code == keyCode && modifiers == carbonModifiers
+        }
+    }
+
     static func displayString(for flags: NSEvent.ModifierFlags, key: String) -> String {
         var text = ""
         if flags.contains(.control) { text += "⌃" }

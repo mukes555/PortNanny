@@ -23,6 +23,36 @@ final class ProcessKillerTests: XCTestCase {
         // kill(0)/kill(-1) would signal whole process groups.
         XCTAssertThrowsError(try killer.killProcess(pid: 0))
         XCTAssertThrowsError(try killer.killProcess(pid: -1))
+        // Past a 32-bit pid: narrowing it to pid_t trapped and took the whole
+        // process down rather than reporting a bad argument.
+        XCTAssertThrowsError(try killer.killProcess(pid: 9_999_999_999))
+        XCTAssertFalse(killer.isProcessRunning(9_999_999_999))
+    }
+
+    /// A kill that signalled nothing is not a kill: the process had exited
+    /// while a dialog stood open, and History recorded it as killed anyway.
+    func testAProcessThatHadAlreadyExitedIsNotReportedAsKilled() throws {
+        let process = Process()
+        process.launchPath = "/bin/sleep"
+        process.arguments = ["0.05"]
+        try process.run()
+        let pid = Int(process.processIdentifier)
+        process.waitUntilExit()
+
+        let outcome = try killer.killProcess(pid: pid, expectedName: "sleep")
+        XCTAssertFalse(outcome.signalled)
+        XCTAssertTrue(outcome.childrenNotKilled.isEmpty)
+    }
+
+    func testAKillThatSignalledReportsThat() throws {
+        let process = Process()
+        process.launchPath = "/bin/sleep"
+        process.arguments = ["100"]
+        try process.run()
+        addTeardownBlock { process.terminate() }
+
+        let outcome = try killer.killProcess(pid: Int(process.processIdentifier), expectedName: "sleep")
+        XCTAssertTrue(outcome.signalled)
     }
 
     func testIdentityMismatchRefusesToKill() throws {

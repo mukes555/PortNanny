@@ -41,6 +41,15 @@ public final class DockerService {
     }
 
     /// Cache read only; never blocks the scan on a subprocess.
+    /// True when the last `docker ps` did not answer. Without it a kill on a
+    /// Docker port said "a container `docker ps` can name" and exited 6, when
+    /// the real problem was that `docker ps` had just timed out.
+    public var lastLookupFailed: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return didFail
+    }
+    private var didFail = false
+
     public func getContainerName(forPort port: Int) -> String? {
         lock.lock(); defer { lock.unlock() }
         return portContainerMap[port]
@@ -91,6 +100,7 @@ public final class DockerService {
             // and wait longer before the next attempt.
             lock.lock()
             portContainerMap = [:]
+            didFail = true
             backoff = Self.nextBackoff(after: backoff)
             nextAttempt = Date().addingTimeInterval(backoff)
             lock.unlock()
@@ -100,6 +110,7 @@ public final class DockerService {
         let map = Self.parsePortMap(output)
         lock.lock()
         portContainerMap = map
+        didFail = false
         backoff = 0
         nextAttempt = .distantPast
         lock.unlock()

@@ -137,16 +137,14 @@ struct HistoryView: View {
     }
 
     private func killAgain(_ item: PortHistoryItem) {
-        guard let target = portManager.activePorts.first(where: { $0.port == item.port }) else { return }
-
-        var message = "This will terminate '\(target.processName)' (PID \(target.pid))."
-        if case .warn(let reason) = KillDecision.forHuman(target: target.agentOwner) {
-            message += "\n\n\(reason)"
+        guard let target = portManager.activePorts.first(where: { $0.port == item.port }) else {
+            KillConfirm.inform(title: "Nothing on :\(item.port)", message: "Nothing is listening on :\(item.port) any more.")
+            return
         }
-        let confirmed = KillConfirm.run(title: "Kill Process on :\(target.port)?", message: message)
-        if confirmed {
-            portManager.killPort(target)
-        }
+        // The shared flow, not a dialog of its own: connected clients, a lease
+        // someone else holds, and a supervisor that would restart the server
+        // are all part of a kill decision, and this one had none of them.
+        KillFlow(portManager: portManager).requestKill(target, force: false, killTree: false)
     }
 
     private func formatDate(_ date: Date) -> String {
