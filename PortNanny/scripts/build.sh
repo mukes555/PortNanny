@@ -3,7 +3,7 @@
 set -euo pipefail
 
 APP_NAME="PortNanny"
-VERSION="2.2.1"
+VERSION="2.3.0"
 BUNDLE_ID="${BUNDLE_ID:-com.mukes555.$APP_NAME}"
 MAKE_DMG=0
 
