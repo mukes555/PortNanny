@@ -11,6 +11,10 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+<!-- next -->
+
+## 2.3.0 (2026-09-16)
+
 A bug-hunting round: fuzzing, concurrent agents, corrupted stores, hostile
 tools and the app's own lifecycle. Everything below was reproduced first.
 
@@ -83,8 +87,6 @@ tools and the app's own lifecycle. Everything below was reproduced first.
   it used to accept and then never fire.
 - Toasts and errors now appear in the Workbench and Settings; both were
   drawn only by the popover.
-
-<!-- next -->
 
 ## 2.2.1 (2026-09-08)
 
