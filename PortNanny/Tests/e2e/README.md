@@ -13,6 +13,7 @@ scanning, attribution, the guard, the supervisors, or the MCP server.
 cd PortNanny
 swift build
 PN=$PWD/.build/debug/portnanny zsh Tests/e2e/guard.sh
+PN=$PWD/.build/debug/portnanny zsh Tests/e2e/kills.sh
 PN=$PWD/.build/debug/portnanny python3 Tests/e2e/mcp.py
 ```
 
@@ -46,6 +47,11 @@ and the `--mine` and `--agent` filters.
 the handshake, all eight tools advertised, `kill_port` defaulting to a dry
 run and refusing another agent's server, leases made over MCP showing up in
 the CLI, and malformed input getting an error without taking the server down.
+
+**`kills.sh`** is what `kill` and `free` report after signalling something
+real: a port taken again the instant it frees (a supervisor with no restart
+delay), a port held by a user this scan cannot see, `exec` taking and giving
+back a lease, and a command `exec` cannot find.
 
 **`detach.py`** is the piece that makes two cases testable at all. Anything
 started from a shell inside an agent session inherits that session's process

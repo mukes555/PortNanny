@@ -138,8 +138,7 @@ public final class ReservationStore {
     }
 
     public static func appStore() -> ReservationStore {
-        let suite = HistoryManager.appSuiteName
-        return ReservationStore(defaults: UserDefaults(suiteName: suite) ?? .standard, lockName: suite)
+        ReservationStore(defaults: HistoryManager.appDefaults(), lockName: HistoryManager.appSuiteName)
     }
 
     /// One instance for the app: the scanner, the views, and the badges read

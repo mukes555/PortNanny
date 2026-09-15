@@ -155,7 +155,17 @@ public final class HistoryManager: ObservableObject {
     /// would not resolve to the app's domain (the binary is reached through
     /// a symlink), so the domain is named explicitly.
     public static func appStore() -> HistoryManager {
-        HistoryManager(defaults: UserDefaults(suiteName: appSuiteName) ?? .standard)
+        HistoryManager(defaults: appDefaults())
+    }
+
+    /// The app's preference domain, from wherever this code is running.
+    /// Inside the app that domain *is* `.standard`, and asking for it by name
+    /// returns nil and logs "using your own bundle identifier as a suite name
+    /// does not make sense"; from the CLI it has to be named.
+    public static func appDefaults() -> UserDefaults {
+        let suite = appSuiteName
+        if suite == Bundle.main.bundleIdentifier { return .standard }
+        return UserDefaults(suiteName: suite) ?? .standard
     }
 
     /// The shared preference domain. Debug builds honour PORTNANNY_DEFAULTS_SUITE

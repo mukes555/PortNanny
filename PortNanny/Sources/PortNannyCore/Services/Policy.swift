@@ -22,7 +22,7 @@ public enum Policy {
 
     /// The store where the app keeps its preferences, which the CLI reads.
     public static func loadFromSharedDomain() {
-        load(from: UserDefaults(suiteName: HistoryManager.appSuiteName) ?? .standard)
+        load(from: HistoryManager.appDefaults())
     }
 
     public static func isValidLeaseTTL(_ seconds: Double) -> Bool {
