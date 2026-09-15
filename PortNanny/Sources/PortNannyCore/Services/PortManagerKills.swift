@@ -167,6 +167,9 @@ extension PortManager {
     /// asking; returning false cancels.
     public func killPortNumber(_ portNumber: Int, force: Bool = false, respectProtected: Bool = false,
                         initiator: KillInitiator = .user, confirm: ((PortInfo) -> Bool)? = nil) {
+        // Read here, on the main thread: the scan below runs on another one,
+        // and Settings can rewrite this list while it does.
+        let protectedNames = protectedProcessSubstrings
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -180,7 +183,7 @@ extension PortManager {
                 return
             }
 
-            if respectProtected && self.isProtectedProcessName(target.processName) {
+            if respectProtected && Self.isProtected(target.processName, by: protectedNames) {
                 DispatchQueue.main.async {
                     self.showToast(":\(portNumber) is protected, not killed")
                 }

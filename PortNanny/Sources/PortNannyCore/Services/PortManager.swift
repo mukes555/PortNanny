@@ -34,6 +34,8 @@ public class PortManager: ObservableObject {
     /// Not published: no view reads it, and publishing it forced two
     /// whole-tree re-renders per refresh even when nothing changed.
     public var isRefreshing = false
+    /// When the scan in flight began; see `scanIsLostAfter`.
+    public var refreshStarted = Date.distantPast
     /// Full-depth signature of `activePorts`, kept so a refresh compares one
     /// side instead of rebuilding both.
     public var activeSignature: [String] = []
@@ -392,8 +394,15 @@ public class PortManager: ObservableObject {
     }
 
     public func isProtectedProcessName(_ processName: String) -> Bool {
+        Self.isProtected(processName, by: protectedProcessSubstrings)
+    }
+
+    /// The same question with the list passed in, for a background thread:
+    /// the published list belongs to the main one, and Settings can rewrite
+    /// it while a kill decision is being made.
+    public static func isProtected(_ processName: String, by substrings: [String]) -> Bool {
         let lower = processName.lowercased()
-        return protectedProcessSubstrings.contains { lower.contains($0) }
+        return substrings.contains { lower.contains($0) }
     }
 
     public func resetProtectedProcessSubstrings() {
