@@ -14,6 +14,21 @@ public enum AgentSessions {
             case ended = 1
             case editor = 2
             case unattributed = 3
+
+            /// The SF Symbol both the popover and the Workbench draw for it.
+            public var icon: String {
+                switch self {
+                case .live: return "sparkles"
+                case .ended: return "moon.zzz"
+                case .editor: return "terminal"
+                case .unattributed: return "person"
+                }
+            }
+
+            /// "Stop all" is for a session. The catch-all group is a
+            /// leftovers bin, and stopping all of it would take the database
+            /// and Docker with it.
+            public var hasBulkVerb: Bool { self != .unattributed }
         }
 
         public let id: String

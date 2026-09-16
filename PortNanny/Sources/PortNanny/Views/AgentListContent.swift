@@ -117,7 +117,7 @@ struct AgentSectionHeader: View {
                 Capsule()
                     .fill(tint)
                     .frame(width: 3, height: 12)
-                Image(systemName: icon)
+                Image(systemName: group.kind.icon)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(tint)
                 Text(group.title)
@@ -133,10 +133,7 @@ struct AgentSectionHeader: View {
                 Text(summary)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                // Not for "No agent": that group is a leftovers bin, not a
-                // session, and stopping all of it would take the database
-                // and Docker with it.
-                if !group.ports.isEmpty, group.kind != .unattributed {
+                if !group.ports.isEmpty, group.kind.hasBulkVerb {
                     Button(group.kind == .ended ? "Clean up" : "Stop all") {
                         KillFlow(portManager: portManager).requestKillAll(
                             group.ports,
@@ -187,15 +184,6 @@ struct AgentSectionHeader: View {
             parts.append("\(group.claims.count) claimed")
         }
         return parts.joined(separator: " · ")
-    }
-
-    private var icon: String {
-        switch group.kind {
-        case .live: return "sparkles"
-        case .ended: return "moon.zzz"
-        case .editor: return "terminal"
-        case .unattributed: return "person"
-        }
     }
 
     private var tint: Color {

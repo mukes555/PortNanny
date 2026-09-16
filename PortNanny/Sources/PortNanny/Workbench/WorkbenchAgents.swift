@@ -47,7 +47,7 @@ struct WorkbenchAgents: View {
     private func card(for session: AgentSessions.Group) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: icon(for: session.kind))
+                Image(systemName: session.kind.icon)
                     .foregroundColor(tint(for: session.kind))
                 Text(session.title).font(.headline)
                 if session.kind == .live {
@@ -77,7 +77,7 @@ struct WorkbenchAgents: View {
                     Text(claim.expiryDescription()).font(.caption2).foregroundColor(.secondary)
                 }
             }
-            if !session.ports.isEmpty {
+            if !session.ports.isEmpty, session.kind.hasBulkVerb {
                 HStack(spacing: 8) {
                     Button(session.kind == .ended ? "Clean up (\(session.ports.count))" : "Stop all (\(session.ports.count))") {
                         KillFlow(portManager: portManager).requestKillAll(session.ports, label: "Stop \(session.title)",
@@ -87,15 +87,6 @@ struct WorkbenchAgents: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
-        }
-    }
-
-    private func icon(for kind: AgentSessions.Group.Kind) -> String {
-        switch kind {
-        case .live: return "sparkles"
-        case .ended: return "moon.zzz"
-        case .editor: return "terminal"
-        case .unattributed: return "questionmark.circle"
         }
     }
 
