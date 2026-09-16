@@ -33,7 +33,9 @@ final class RefusalWatcher: NSObject, UNUserNotificationCenterDelegate {
             return
         }
         guard portManager.notifies(.refusal) else { return }
-        Notifier.sendRefusal(recorded, sound: portManager.notificationSound)
+        // Ten agents refused in a minute is one story, not ten banners.
+        guard case .post(let withSound) = portManager.notifications.verdict(port: recorded.port, kind: .refusal) else { return }
+        Notifier.sendRefusal(recorded, sound: portManager.notificationSound && withSound)
     }
 
     static func recordedRefusal(matching posted: RefusalSignal.Payload, in refusals: [PortHistoryItem], now: Date = Date()) -> RefusalSignal.Payload? {

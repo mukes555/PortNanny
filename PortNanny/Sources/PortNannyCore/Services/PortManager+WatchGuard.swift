@@ -81,17 +81,29 @@ extension PortManager {
             // Watched ports already got a "free" notification from the watch
             // diff this cycle: don't send a second one for the same event.
             if !watchedPorts.contains(port) {
-                notify(.portFreed, title: "Port \(port) is free", body: "The process finally exited: :\(port) is available now.")
+                notify(.portFreed, port: port, title: "Port \(port) is free", body: "The process finally exited: :\(port) is available now.")
             }
         }
         pendingFreeNotifications.subtract(freed)
     }
 
-    /// Sends a notification only when the person wants that kind. Guard
-    /// kills still happen regardless; only the alert is suppressed.
-    private func notify(_ kind: NotificationKind, title: String, body: String) {
+    /// Sends a notification only when the person wants that kind, and only
+    /// as often as `NotificationGate` allows. Guard kills still happen
+    /// regardless; only the banner is rationed.
+    private func notify(_ kind: NotificationKind, port: Int, title: String, body: String) {
         guard notifies(kind) else { return }
-        Notifier.send(title: title, body: body, sound: notificationSound)
+        guard case .post(let withSound) = notifications.verdict(port: port, kind: kind) else { return }
+        Notifier.send(title: title, body: body, sound: notificationSound && withSound,
+                      id: "portnanny-\(kind)-\(port)")
+    }
+
+    /// One banner for everything held while the person was away, or while a
+    /// port was flapping. Called when the screen unlocks or the display wakes.
+    public func flushHeldNotifications() {
+        guard let summary = notifications.takeSummary(), notificationsEnabled else { return }
+        Notifier.send(title: "PortNanny kept watching",
+                      body: NotificationGate.summaryBody(count: summary.count, ports: summary.ports),
+                      sound: false, id: "portnanny-summary")
     }
 
     /// A process that keeps coming back (pm2, nodemon, a launchd KeepAlive
@@ -171,7 +183,7 @@ extension PortManager {
             for event in Self.watchEvents(watched: watchedPorts, previous: watchedOccupancy, current: current) {
                 switch event.kind {
                 case .freed:
-                    notify(.portFreed, title: ":\(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
+                    notify(.portFreed, port: event.port, title: ":\(event.port) is free", body: "Nothing is listening on :\(event.port) anymore.")
                 case .occupied(let name):
                     if let intruder = guardKillTarget(for: event.port, in: ports) {
                         let owner = intruder.agentOwner ?? guardOwners[intruder.pid]
@@ -180,7 +192,7 @@ extension PortManager {
                             // The only unattended kill in the app never takes
                             // another agent's live server; the person decides.
                             notify(
-                                .guardKill,
+                                .guardKill, port: event.port,
                                 title: "Guard on :\(event.port)",
                                 body: "'\(name)' took the port but was not auto-killed. \(reason)"
                             )
@@ -188,7 +200,7 @@ extension PortManager {
                             guardedPorts.remove(event.port)
                             guardStrikes[event.port] = nil
                             notify(
-                                .guardKill,
+                                .guardKill, port: event.port,
                                 title: "Guard on :\(event.port) stood down",
                                 body: "'\(intruder.processName)' keeps coming back. Stop it at the source, then re-enable the guard."
                             )
@@ -198,16 +210,16 @@ extension PortManager {
                             // mentioned at all: the person was told a port had
                             // been cleared while the intruder kept it.
                             notify(
-                                .guardKill,
+                                .guardKill, port: event.port,
                                 title: "Guard on :\(event.port)",
                                 body: "Stopping '\(intruder.processName)': it took a guarded port."
                             )
                             killPort(intruder, initiator: .portGuard) { [weak self] problem in
-                                self?.notify(.guardKill, title: "Guard on :\(event.port) could not stop it", body: problem)
+                                self?.notify(.guardKill, port: event.port, title: "Guard on :\(event.port) could not stop it", body: problem)
                             }
                         }
                     } else {
-                        notify(.portTaken, title: ":\(event.port) is in use", body: "'\(name)' started listening on :\(event.port).")
+                        notify(.portTaken, port: event.port, title: ":\(event.port) is in use", body: "'\(name)' started listening on :\(event.port).")
                     }
                 }
             }
