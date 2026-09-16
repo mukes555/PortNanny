@@ -15,8 +15,8 @@ release, rename it to the version and date.
 - **The guard had no visible way in.** A row offered Kill, Watch and (in
   Advanced) Details; guarding a port meant knowing to right-click it, or
   having something watched already, since the shield lived in the watched
-  section. Every row now carries the shield next to the star, on hover or
-  keyboard selection, and a guarded port wears an orange shield of its own.
+  section. Every row now carries the shield beside Kill, dimmed until the
+  mouse or the keyboard is on the row, and orange while the guard is on.
 - The orange shield meant "protected" on a row and "guarded" in the
   Workbench. Protected is a lock now, and the shield means the guard
   everywhere.

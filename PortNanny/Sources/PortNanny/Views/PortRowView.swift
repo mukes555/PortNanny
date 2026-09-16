@@ -316,22 +316,26 @@ struct PortRowView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(isWatched ? "Stop watching port \(port.port)" : "Watch port \(port.port)")
                 .help(isWatched ? "Stop watching" : "Watch: be told when it frees up or gets taken")
-                // The guard used to be reachable only by right-clicking, or
-                // from the watched section, which is not there until
-                // something is watched: the app's own feature, hidden.
-                Button(action: { GuardConfirm.toggle(port.port, in: manager) }) {
-                    Image(systemName: isGuarded ? "shield.fill" : "shield")
-                        .foregroundColor(isGuarded ? .orange : .secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isGuarded ? "Remove guard on port \(port.port)" : "Guard port \(port.port)")
-                .help(isGuarded
-                      ? "Guard active: anything that takes :\(port.port) gets stopped"
-                      : "Guard :\(port.port): stop anything that takes it (asks first)")
             }
             .opacity(showsExtraVerbs ? 1 : 0)
             .allowsHitTesting(showsExtraVerbs)
             .accessibilityHidden(true)
+
+            // The guard stays on the row, dimmed until the mouse or the
+            // keyboard is on it. It is the one verb with no other way in:
+            // the star shows as a badge once it is on, the browser has ⌘O
+            // and the tip bar, but a guard could only be reached by
+            // right-clicking, and an action nobody can see is not offered.
+            Button(action: { GuardConfirm.toggle(port.port, in: manager) }) {
+                Image(systemName: isGuarded ? "shield.fill" : "shield")
+                    .foregroundColor(isGuarded ? .orange : .secondary)
+            }
+            .buttonStyle(.plain)
+            .opacity(isGuarded || showsExtraVerbs ? 1 : 0.4)
+            .accessibilityHidden(true)
+            .help(isGuarded
+                  ? "Guard active: anything that takes :\(port.port) gets stopped"
+                  : "Guard :\(port.port): stop anything that takes it (asks first)")
 
             if isAdvanced {
                 Button(action: onSelect) {
