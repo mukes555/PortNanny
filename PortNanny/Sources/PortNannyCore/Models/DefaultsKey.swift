@@ -7,7 +7,11 @@ public enum DefaultsKey {
     public static let protectedProcessSubstrings = "PortNanny.protectedProcessSubstrings"
     public static let hideSystemProcesses = "PortNanny.hideSystemProcesses"
     public static let confirmBeforeKill = "PortNanny.confirmBeforeKill"
+    /// The Clean/Advanced setting these two replaced; still read once, to
+    /// carry an upgrade's Advanced over to `showDetails`.
     public static let viewDensity = "PortNanny.viewDensity"
+    public static let viewMode = "PortNanny.viewMode"
+    public static let showDetails = "PortNanny.showDetails"
     public static let showMenuBarCount = "PortNanny.showMenuBarCount"
     public static let menuBarIcon = "PortNanny.menuBarIcon"
     public static let popoverSize = "PortNanny.popoverSize"

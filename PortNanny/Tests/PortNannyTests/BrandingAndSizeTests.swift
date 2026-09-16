@@ -152,7 +152,7 @@ final class BrandingAndSizeTests: XCTestCase {
             PortInfo(port: 3000 + index, pid: 100 + index, processName: "node", command: "node", user: "me",
                      memoryUsage: "1MB", memorySizeKB: 1, type: .nodejs, agentOwner: owner)
         }
-        XCTAssertEqual(WorkbenchModel.liveSessionCount(of: ports), 2, "one Claude session on two ports and one Codex; ended and terminal do not count")
+        XCTAssertEqual(AgentSessions.liveSessionCount(of: ports), 2, "one Claude session on two ports and one Codex; ended and terminal do not count")
     }
 
     func testTheAvatarIsTheHeadCutFromTheArtwork() throws {

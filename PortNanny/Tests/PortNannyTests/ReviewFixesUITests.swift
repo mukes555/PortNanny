@@ -57,9 +57,9 @@ final class ReviewFixesUITests: XCTestCase {
             port(4000, owner: ended), port(5000, owner: editor), port(6000),
         ]
         XCTAssertEqual(WorkbenchModel.projectCount(of: ports), WorkbenchModel.projects(from: ports).count)
-        XCTAssertEqual(WorkbenchModel.sessionCount(of: ports), WorkbenchModel.agentSessions(from: ports).count)
+        XCTAssertEqual(AgentSessions.sessionCount(of: ports), AgentSessions.groups(from: ports).count)
         XCTAssertEqual(WorkbenchModel.projectCount(of: ports), 3)
-        XCTAssertEqual(WorkbenchModel.sessionCount(of: ports), 5)
+        XCTAssertEqual(AgentSessions.sessionCount(of: ports), 5)
     }
 
     func testSignatureReflectsConnections() {

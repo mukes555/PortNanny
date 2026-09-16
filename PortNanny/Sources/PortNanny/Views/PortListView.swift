@@ -102,6 +102,14 @@ struct PortListView: View {
             .sorted { (Self.categoryRank[$0.key] ?? 999) < (Self.categoryRank[$1.key] ?? 999) }
     }
 
+    /// The same ports, grouped by the session that started them. Claims (a
+    /// lease with nothing listening yet) only make sense unfiltered: a search
+    /// or a category filter is about processes, and a claim has none.
+    var agentGroups: [AgentSessions.Group] {
+        let claims = filter == .all && paletteQuery.rowFilter.isEmpty ? ReservationStore.shared.recent() : []
+        return AgentSessions.groups(from: filteredPorts, leases: claims)
+    }
+
     var filteredTests: [TestProcessInfo] {
         let needle = paletteQuery.rowFilter
         if needle.isEmpty {
@@ -113,10 +121,14 @@ struct PortListView: View {
         }
     }
 
-    /// Row order as displayed, used for arrow-key navigation.
+    /// Row order as displayed, used for arrow-key navigation. It has to
+    /// follow whichever grouping is on screen, or the arrows jump about.
     var visibleIdsInOrder: [String] {
         if filter == .tests {
             return filteredTests.map(\.id)
+        }
+        if portManager.viewMode == .agents {
+            return agentGroups.flatMap { $0.ports.map(\.id) }
         }
         return groupedPorts.flatMap { $0.value.map(\.id) }
     }
@@ -239,6 +251,17 @@ struct PortListView: View {
                 loadingStateView
             } else if filteredPorts.isEmpty {
                 emptyStateView
+            } else if portManager.viewMode == .agents {
+                AgentListContent(
+                    groups: agentGroups,
+                    metrics: metrics,
+                    portManager: portManager,
+                    selectedId: $selectedId,
+                    expandedIds: $expandedIds,
+                    onSelectPort: { port in activeSheet = .portDetail(port) },
+                    onKillRequest: { port, force, killTree in requestKill(port, force: force, killTree: killTree) },
+                    onKillChild: { child in requestKillChild(child) }
+                )
             } else {
                 PortListContent(
                     groupedPorts: groupedPorts,

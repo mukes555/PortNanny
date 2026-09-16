@@ -102,13 +102,13 @@ final class PaletteAndWorkbenchTests: XCTestCase {
             port(3000, owner: live), port(3001, owner: live), port(3002, owner: otherLive),
             port(4000, owner: ended), port(5000, owner: editor), port(6000),
         ]
-        let sessions = WorkbenchModel.agentSessions(from: ports)
+        let sessions = AgentSessions.groups(from: ports)
         XCTAssertEqual(sessions.map(\.kind), [.live, .live, .ended, .editor, .unattributed])
         XCTAssertEqual(sessions[0].ports.map(\.port), [3000, 3001], "two windows of one tool are two sessions")
         XCTAssertEqual(sessions[0].subtitle, "session 10 · from process tree")
         XCTAssertEqual(sessions[2].title, "Cursor")
         XCTAssertEqual(sessions[3].title, "VS Code terminal")
-        XCTAssertEqual(sessions[4].title, "Unattributed")
-        XCTAssertEqual(WorkbenchModel.orphaned(ports).map(\.port), [4000])
+        XCTAssertEqual(sessions[4].title, "No agent")
+        XCTAssertEqual(AgentSessions.orphaned(ports).map(\.port), [4000])
     }
 }

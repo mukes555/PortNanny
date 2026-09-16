@@ -17,6 +17,14 @@ enum DemoData {
     private static let claudeEnded = AgentOwner(name: "Claude Code", sessionPid: 3950, source: .processTree, sessionEnded: true)
     private static let cursorLive = AgentOwner(name: "Cursor", sessionPid: 4002, source: .environment)
 
+    /// A port an agent has taken and not started on yet: the Agents view is
+    /// the only place this can be shown, since there is no process to list.
+    /// No session pid on purpose: a lease pinned to a process that has
+    /// exited is over, however long its clock says, and a made-up pid would
+    /// vanish before the snapshot was taken.
+    static let claim = Reservation(port: 3100, owner: "Codex CLI", sessionKey: "s-42",
+                                   reason: "building the checkout page", ttl: 20 * 60)
+
     /// The reel kills :3000 halfway through, so it can be left out.
     static func ports(includePort3000: Bool) -> [PortInfo] {
         var ports: [PortInfo] = [

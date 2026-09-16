@@ -1,17 +1,19 @@
 import PortNannyCore
 import SwiftUI
 
-/// A modern segmented "radio" toggle: a pill with a sliding selection.
-/// Simple ⟷ Advanced row density.
-struct DensityToggle: View {
+/// Agents ⟷ Ports: a pill with a sliding selection, the one place the list's
+/// organisation is chosen. (It replaced a Simple/Advanced density toggle;
+/// the detail it used to carry is now a switch in Settings.)
+struct ViewModeToggle: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Binding var density: PortManager.ViewDensity
+    @Binding var mode: PortManager.ViewMode
     @Namespace private var slider
 
     var body: some View {
         HStack(spacing: 0) {
-            segment("Simple", icon: "list.bullet", value: .simple)
-            segment("Advanced", icon: "list.bullet.rectangle", value: .advanced)
+            ForEach(PortManager.ViewMode.allCases, id: \.self) { value in
+                segment(value)
+            }
         }
         .padding(2)
         .background(
@@ -20,20 +22,20 @@ struct DensityToggle: View {
         .overlay(
             Capsule().stroke(Color(nsColor: .separatorColor), lineWidth: 1)
         )
-        .help("Row density: Simple shows just the essentials, Advanced shows the command, chips, and process tree.")
+        .help("Agents groups what is listening by the session that started it. Ports lists everything by kind.")
     }
 
-    private func segment(_ title: String, icon: String, value: PortManager.ViewDensity) -> some View {
-        let selected = density == value
+    private func segment(_ value: PortManager.ViewMode) -> some View {
+        let selected = mode == value
         return Button {
             withAnimation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.85)) {
-                density = value
+                mode = value
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: icon)
+                Image(systemName: value.icon)
                     .font(.system(size: 10, weight: .medium))
-                Text(title)
+                Text(value.label)
                     .font(.system(size: 11, weight: selected ? .semibold : .regular))
             }
             .foregroundColor(selected ? .primary : .secondary)
@@ -52,7 +54,7 @@ struct DensityToggle: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title) view")
+        .accessibilityLabel("\(value.label) view")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

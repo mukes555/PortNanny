@@ -12,7 +12,13 @@ struct PortRowView: View {
     }
 
     let port: PortInfo
-    let density: PortManager.ViewDensity
+    /// The detail switch, not a view mode: the command line, the chips,
+    /// CPU and age, and the process tree.
+    let showsDetails: Bool
+    /// True in the Agents view, where the section header already names the
+    /// session: the same chip on every row of it is noise, and the room goes
+    /// to the project instead.
+    var hidesAgentChip = false
     let metrics: RowMetrics
     let isProtected: Bool
     let isWatched: Bool
@@ -29,12 +35,12 @@ struct PortRowView: View {
     // Widths follow the text size so Larger Text reflows instead of clipping.
     @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
 
-    private var isAdvanced: Bool { density == .advanced }
+    private var isAdvanced: Bool { showsDetails }
     private var hasTree: Bool { !(port.children ?? []).isEmpty }
     /// Hover and selection reveal the secondary verbs.
     private var showsExtraVerbs: Bool { isHovered || isSelected }
 
-    /// Compact identifier shown inline in Simple mode (project, else container).
+    /// Compact identifier shown inline when details are off (project, else container).
     private var cleanSubtitle: String? {
         if let project = port.projectName { return project }
         if let container = port.containerName { return container }
@@ -204,7 +210,7 @@ struct PortRowView: View {
                 .help("\(port.connections) client\(port.connections == 1 ? "" : "s") connected right now")
         }
         // Which AI agent spawned this: the friendly-fire signal.
-        if let agent = port.agentOwner {
+        if let agent = port.agentOwner, !hidesAgentChip {
             AgentChip(agent: agent)
         }
     }

@@ -27,6 +27,13 @@ extension AppDelegate {
                 portManager.activeTests = [DemoData.test]
                 portManager.activePorts = DemoData.ports(includePort3000: true)
                 portManager.clock.lastUpdated = Date()
+                // The guard's work, made visible: one agent told no about
+                // another's port. Written to the snapshot's own defaults.
+                portManager.history.addRefusal(port: 3000, processName: "node", owner: "Claude Code", refused: "Codex CLI")
+                // And an agent that has claimed a port before starting on it.
+                let claim = DemoData.claim
+                _ = ReservationStore.shared.release(port: claim.port, by: nil, force: true)
+                try? ReservationStore.shared.reserve(claim, by: claim.holder)
             } else {
                 // Render what an open popover shows: full scans, not the light
                 // hidden-state ones.
@@ -72,9 +79,12 @@ extension AppDelegate {
         if let watchList = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_SNAPSHOT_WATCH"] {
             portManager.watchedPorts = Set(watchList.split(separator: ",").compactMap { Int($0) })
         }
-        if let density = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_SNAPSHOT_DENSITY"],
-           let value = PortManager.ViewDensity(rawValue: density) {
-            portManager.viewDensity = value
+        if let mode = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_SNAPSHOT_MODE"],
+           let value = PortManager.ViewMode(rawValue: mode) {
+            portManager.viewMode = value
+        }
+        if let details = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_SNAPSHOT_DETAILS"] {
+            portManager.showsDetails = details == "1"
         }
 
         let view: NSView

@@ -226,13 +226,15 @@ private struct DisplaySettings: View {
                     .settingsCaption()
             }
 
-            Section("Row density") {
-                Picker("Density", selection: $portManager.viewDensity) {
-                    Text("Simple").tag(PortManager.ViewDensity.simple)
-                    Text("Advanced").tag(PortManager.ViewDensity.advanced)
+            Section("View") {
+                Picker("Show", selection: $portManager.viewMode) {
+                    ForEach(PortManager.ViewMode.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                Text("Simple shows the port, the name, its badges, and memory. Advanced adds the command, project and container chips, CPU with its trend, and the process tree.")
+                Text("Agents groups what is listening by the session that started it: each agent, the sessions that have ended, and everything nobody claims. Ports is the plain list by kind.")
+                    .settingsCaption()
+                Toggle("Show details in rows", isOn: $portManager.showsDetails)
+                Text("The command, project and container chips, CPU with its trend, and the process tree. Off, a row is the port, the name, its badges, and memory.")
                     .settingsCaption()
             }
 
