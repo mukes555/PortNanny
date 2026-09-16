@@ -11,6 +11,13 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+<!-- next -->
+
+## 2.4.1 (2026-09-16)
+
+The guard, findable. It was the app's own automation and the only way to
+reach it on a row was to know to right-click.
+
 ### Fixed
 - **The guard had no visible way in.** A row offered Kill, Watch and (in
   Advanced) Details; guarding a port meant knowing to right-click it, or
@@ -20,8 +27,6 @@ release, rename it to the version and date.
 - The orange shield meant "protected" on a row and "guarded" in the
   Workbench. Protected is a lock now, and the shield means the guard
   everywhere.
-
-<!-- next -->
 
 ## 2.4.0 (2026-09-16)
 
