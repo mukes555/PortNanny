@@ -77,10 +77,12 @@ if portBusy 45011; then bad "45011 was already busy"; else
   alive $PID_U && ok "the unclaimed server survived" || bad "it was killed anyway"
 
   print "\n== 8. the switch that governs that rule"
-  defaults write com.mukes555.PortNanny PortNanny.guardRefusesUnclaimed -bool false
+  # The run's own domain, never the real one: this suite used to flip the
+  # switch in the preferences of whoever happened to be using the Mac.
+  defaults write "$E2E_SUITE" PortNanny.guardRefusesUnclaimed -bool false
   asAgent Cursor sess-beta kill 45011 --dry-run >/dev/null 2>&1
   check "with the switch off the same agent is allowed" 0 $?
-  defaults write com.mukes555.PortNanny PortNanny.guardRefusesUnclaimed -bool true
+  defaults write "$E2E_SUITE" PortNanny.guardRefusesUnclaimed -bool true
   asAgent Cursor sess-beta kill 45011 --dry-run >/dev/null 2>&1
   check "with it back on the refusal returns" 3 $?
 
