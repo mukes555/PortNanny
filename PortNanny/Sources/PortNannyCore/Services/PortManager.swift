@@ -131,16 +131,34 @@ public class PortManager: ObservableObject {
         }
     }
 
-    /// How the list is organised. Agents groups what is listening by the
+    /// The three tabs over the list. Agents groups what is listening by the
     /// session that started it, which is the question this app exists to
-    /// answer; Ports is the plain list by kind, for when the machine matters
-    /// more than who asked for it.
+    /// answer, so it is where PortNanny opens. Simple and Advanced are the
+    /// plain list by kind: one glanceable line per port, or the command,
+    /// chips, CPU with its trend, and the process tree.
+    ///
+    /// Raw values for Simple and Advanced are what the density setting they
+    /// came from stored, so an old value still reads.
     public enum ViewMode: String, CaseIterable {
         case agents
-        case ports
+        case simple = "clean"
+        case advanced
 
-        public var label: String { self == .agents ? "Agents" : "Ports" }
-        public var icon: String { self == .agents ? "sparkles" : "list.bullet" }
+        public var label: String {
+            switch self {
+            case .agents: return "Agents"
+            case .simple: return "Simple"
+            case .advanced: return "Advanced"
+            }
+        }
+
+        public var icon: String {
+            switch self {
+            case .agents: return "sparkles"
+            case .simple: return "list.bullet"
+            case .advanced: return "list.bullet.rectangle"
+            }
+        }
     }
     @Published public var viewMode: ViewMode = .agents {
         didSet {
@@ -149,15 +167,9 @@ public class PortManager: ObservableObject {
         }
     }
 
-    /// The command line, the chips, CPU and age, and the process tree. This
-    /// was the "Advanced" half of the old density setting; it is now a switch
-    /// that applies to either view.
-    @Published public var showsDetails = false {
-        didSet {
-            guard !isRestoringPreferences else { return }
-            defaults.set(showsDetails, forKey: DefaultsKey.showDetails)
-        }
-    }
+    /// Rows carry the command line, the chips, CPU and age, and the process
+    /// tree only in Advanced; the Agents view is an overview and stays clean.
+    public var showsDetails: Bool { viewMode == .advanced }
 
     /// Show the dev-port count next to the menu bar icon.
     @Published public var showMenuBarCount: Bool = true {
@@ -342,11 +354,9 @@ public class PortManager: ObservableObject {
         if let stored = defaults.object(forKey: DefaultsKey.probeLocalServers) as? Bool {
             probeLocalServers = stored
         }
-        // The old Clean/Advanced density became a view and a switch: whoever
-        // had Advanced keeps the detail, and everybody starts in the view
-        // this app is for.
-        showsDetails = defaults.object(forKey: DefaultsKey.showDetails) as? Bool
-            ?? (defaults.string(forKey: DefaultsKey.viewDensity) == "advanced")
+        // A choice made in this version stands. Everyone else, including an
+        // upgrade that had Simple or Advanced, starts in Agents: one click
+        // puts them back where they were.
         if let stored = defaults.string(forKey: DefaultsKey.viewMode), let mode = ViewMode(rawValue: stored) {
             viewMode = mode
         }
@@ -433,7 +443,6 @@ public class PortManager: ObservableObject {
         hideSystemProcesses = true
         confirmBeforeKill = true
         viewMode = .agents
-        showsDetails = false
         showMenuBarCount = true
         menuBarIcon = .mono
         popoverSize = .regular

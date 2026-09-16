@@ -41,6 +41,8 @@ struct WorkbenchAgents: View {
                 }
                 .listStyle(.inset)
             }
+            Divider()
+            AgentToolsSection(tools: AgentTools.shared)
         }
     }
 

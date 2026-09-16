@@ -227,14 +227,11 @@ private struct DisplaySettings: View {
             }
 
             Section("View") {
-                Picker("Show", selection: $portManager.viewMode) {
+                Picker("Open in", selection: $portManager.viewMode) {
                     ForEach(PortManager.ViewMode.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                Text("Agents groups what is listening by the session that started it: each agent, the sessions that have ended, and everything nobody claims. Ports is the plain list by kind.")
-                    .settingsCaption()
-                Toggle("Show details in rows", isOn: $portManager.showsDetails)
-                Text("The command, project and container chips, CPU with its trend, and the process tree. Off, a row is the port, the name, its badges, and memory.")
+                Text("Agents groups what is listening by the session that started it, with the ports each agent has claimed and the AI tools on this Mac. Simple lists every port by kind, one line each. Advanced adds the command, project and container chips, CPU with its trend, and the process tree. The same three tabs sit at the top of the list.")
                     .settingsCaption()
             }
 

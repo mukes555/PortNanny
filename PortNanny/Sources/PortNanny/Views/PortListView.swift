@@ -254,6 +254,7 @@ struct PortListView: View {
             } else if portManager.viewMode == .agents {
                 AgentListContent(
                     groups: agentGroups,
+                    showsTools: filter == .all && paletteQuery.rowFilter.isEmpty,
                     metrics: metrics,
                     portManager: portManager,
                     selectedId: $selectedId,

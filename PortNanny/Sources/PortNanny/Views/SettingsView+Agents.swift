@@ -2,17 +2,16 @@ import AppKit
 import PortNannyCore
 import SwiftUI
 
-/// Settings > Agents: the AI tools this Mac has, the guard's one knob,
-/// setting a project up with a click per step (what `portnanny setup`
-/// does), and port leases.
+/// Settings > Agents: settings only. The guard's one knob, setting a project
+/// up with a click per step (what `portnanny setup` does), and how long a
+/// lease lasts. What is happening on the machine (which tools are running,
+/// which ports are leased) is shown in the Agents view, not here.
 struct AgentsSettings: View {
     @ObservedObject var portManager: PortManager
     @AppStorage(DefaultsKey.setupProject, store: AppDelegate.preferenceDefaults) private var projectPath = ""
-    @State private var report: DoctorAgents.Report?
     @State private var steps: [CLISetup.Step] = []
     @State private var outcomes: [String: CLISetup.Outcome] = [:]
     @State private var applying: Set<String> = []
-    @State private var leases: [Reservation] = []
 
     /// The chosen folder, only while it exists; nothing defaults to home.
     private var project: URL? {
@@ -27,18 +26,6 @@ struct AgentsSettings: View {
 
     var body: some View {
         Form {
-            Section("Tools on this Mac") {
-                if let report {
-                    ForEach(report.agents, id: \.name) { tool in
-                        toolRow(tool)
-                    }
-                } else {
-                    Text("Looking…").settingsCaption()
-                }
-                Button("Refresh") { loadReport() }
-                    .controlSize(.small)
-            }
-
             Section("The guard") {
                 Toggle("Refuse agents a server nobody claims", isOn: $portManager.guardRefusesUnclaimed)
                 Text("Most unclaimed servers are a person's. On, an agent must ask (or start its own server with PORTNANNY_OWNER set); off, it may stop one like a person. Another agent's running server is always refused. The CLI and the MCP server follow this switch; it is a preference on this Mac, not a lock against an agent with a shell.")
@@ -71,45 +58,16 @@ struct AgentsSettings: View {
                         Text(option.label).tag(option.seconds)
                     }
                 }
-                Text("Used by `portnanny reserve` and the MCP reserve_port tool when no length is given. `exec` leases last as long as the command runs.")
+                Text("Used by `portnanny reserve` and the MCP reserve_port tool when no length is given. `exec` leases last as long as the command runs. The leases agents hold right now are in the Agents view, under each session.")
                     .settingsCaption()
-                if leases.isEmpty {
-                    Text("No leases right now. Agents take one with `portnanny exec --free-port` or `portnanny reserve`; a lease keeps other agents off the port until it expires.")
-                        .settingsCaption()
-                } else {
-                    ForEach(leases) { lease in
-                        leaseRow(lease)
-                    }
-                }
             }
         }
         .formStyle(.grouped)
-        .onAppear {
-            loadReport()
-            loadLeases()
-        }
+        .onAppear { loadReport() }
         .onChange(of: projectPath) { _ in loadReport() }
     }
 
     // MARK: - Rows
-
-    private func toolRow(_ tool: DoctorAgents.Status) -> some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(tool.name).fontWeight(.medium)
-                Text(tool.session).settingsCaption()
-            }
-            Spacer()
-            if tool.running > 0 {
-                Chip(icon: "sparkles", text: "running \(tool.running)", tint: .chipTeal)
-            } else if let path = tool.installedAt {
-                Chip(icon: "checkmark", text: "installed", tint: .secondary)
-                    .help(path)
-            } else {
-                Text("not found").settingsCaption()
-            }
-        }
-    }
 
     private func stepRow(_ step: CLISetup.Step) -> some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -147,33 +105,10 @@ struct AgentsSettings: View {
         .padding(.vertical, 2)
     }
 
-    private func leaseRow(_ lease: Reservation) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "lock").foregroundColor(.chipPurple)
-            Text(":\(String(lease.port))")
-                .font(.system(.body, design: .monospaced))
-            VStack(alignment: .leading, spacing: 1) {
-                Text("\(lease.describedHolder) \(lease.expiryDescription())").font(.callout)
-                if let reason = lease.reason {
-                    Text(reason).settingsCaption()
-                }
-            }
-            Spacer()
-            Button("Release") {
-                guard KillConfirm.run(title: "Release :\(lease.port)?",
-                                      message: "\(lease.describedHolder) is holding it \(lease.expiryDescription()). Releasing lets anything else take the port.",
-                                      confirmTitle: "Release") else { return }
-                _ = ReservationStore.shared.release(port: lease.port, by: nil, force: true)
-                loadLeases()
-            }
-            .controlSize(.small)
-        }
-    }
-
     // MARK: - Actions
 
-    /// The doctor captures the process table and the plan asks the
-    /// diagnostics about PATH: both off the main thread, once per visit
+    /// The setup steps depend on which tools are here. The doctor captures
+    /// the process table and asks PATH: off the main thread, once per visit
     /// and per folder change, never per render.
     private func loadReport() {
         let folder = project ?? FileManager.default.homeDirectoryForCurrentUser
@@ -181,14 +116,9 @@ struct AgentsSettings: View {
             let found = DoctorAgents.report()
             let planned = CLISetup.plan(agents: found, project: folder)
             DispatchQueue.main.async {
-                report = found
                 steps = planned
             }
         }
-    }
-
-    private func loadLeases() {
-        leases = ReservationStore.shared.all()
     }
 
     private func chooseProject() {
