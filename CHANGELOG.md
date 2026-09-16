@@ -11,6 +11,14 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+<!-- next -->
+
+## 2.4.0 (2026-09-16)
+
+PortNanny opens on who is working now: an Agents tab beside Simple and
+Advanced, the AI tools on this Mac out of Settings and into it, and
+`portnanny agents` for the same answer in a terminal.
+
 ### Added
 - **An Agents tab, next to Simple and Advanced, and PortNanny opens on it.**
   What is listening is grouped by the session that started it: each agent
@@ -28,8 +36,6 @@ release, rename it to the version and date.
   running, the ports it has claimed, and which one is you. The rules file
   PortNanny installs into projects now points agents at it.
 - The Workbench opens on Agents, and its session cards show claims too.
-
-<!-- next -->
 
 ## 2.3.0 (2026-09-16)
 
