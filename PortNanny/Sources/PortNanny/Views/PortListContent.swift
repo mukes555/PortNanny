@@ -56,7 +56,7 @@ struct PortSectionView: View {
             ForEach(ports) { port in
                 PortRowView(
                     port: port,
-                    density: portManager.viewDensity,
+                    showsDetails: portManager.showsDetails,
                     metrics: metrics,
                     isProtected: portManager.isProtectedProcessName(port.processName),
                     isWatched: portManager.isWatched(port.port),

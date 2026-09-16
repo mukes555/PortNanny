@@ -7,12 +7,12 @@ struct WorkbenchAgents: View {
     @ObservedObject var portManager: PortManager
     @Binding var selection: String?
 
-    private var sessions: [WorkbenchModel.AgentSession] {
-        WorkbenchModel.agentSessions(from: portManager.visiblePorts)
+    private var sessions: [AgentSessions.Group] {
+        AgentSessions.groups(from: portManager.visiblePorts, leases: ReservationStore.shared.recent())
     }
 
     private var orphaned: [PortInfo] {
-        WorkbenchModel.orphaned(portManager.visiblePorts)
+        AgentSessions.orphaned(portManager.visiblePorts)
     }
 
     var body: some View {
@@ -44,10 +44,10 @@ struct WorkbenchAgents: View {
         }
     }
 
-    private func card(for session: WorkbenchModel.AgentSession) -> some View {
+    private func card(for session: AgentSessions.Group) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: icon(for: session.kind))
+                Image(systemName: session.kind.icon)
                     .foregroundColor(tint(for: session.kind))
                 Text(session.title).font(.headline)
                 if session.kind == .live {
@@ -56,35 +56,41 @@ struct WorkbenchAgents: View {
                     Chip(text: "ended", tint: .secondary)
                 }
                 Spacer()
-                Text("\(session.ports.count) port\(session.ports.count == 1 ? "" : "s")")
+                Text(session.ports.isEmpty
+                     ? "\(session.claims.count) claimed"
+                     : "\(session.ports.count) port\(session.ports.count == 1 ? "" : "s")")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             Text(session.subtitle)
                 .font(.caption)
                 .foregroundColor(.secondary)
-            PortChipRow(ports: session.ports, selection: $selection)
-            HStack(spacing: 8) {
-                Button(session.kind == .ended ? "Clean up (\(session.ports.count))" : "Stop all (\(session.ports.count))") {
-                    KillFlow(portManager: portManager).requestKillAll(session.ports, label: "Stop \(session.title)",
-                                                                     confirmTitle: session.kind == .ended ? "Clean Up" : "Stop All")
+            if !session.ports.isEmpty {
+                PortChipRow(ports: session.ports, selection: $selection)
+            }
+            // A session can hold a port before it starts anything on it.
+            ForEach(session.claims) { claim in
+                HStack(spacing: 6) {
+                    Image(systemName: "bookmark").font(.caption2).foregroundColor(.secondary)
+                    Text(":" + String(claim.port)).font(.system(size: 11, weight: .medium, design: .monospaced))
+                    Text(claim.reason ?? "reserved, nothing listening yet").font(.caption).foregroundColor(.secondary).lineLimit(1)
+                    Text(claim.expiryDescription()).font(.caption2).foregroundColor(.secondary)
                 }
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            if !session.ports.isEmpty, session.kind.hasBulkVerb {
+                HStack(spacing: 8) {
+                    Button(session.kind == .ended ? "Clean up (\(session.ports.count))" : "Stop all (\(session.ports.count))") {
+                        KillFlow(portManager: portManager).requestKillAll(session.ports, label: "Stop \(session.title)",
+                                                                         confirmTitle: session.kind == .ended ? "Clean Up" : "Stop All")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
         }
     }
 
-    private func icon(for kind: WorkbenchModel.AgentSession.Kind) -> String {
-        switch kind {
-        case .live: return "sparkles"
-        case .ended: return "moon.zzz"
-        case .editor: return "terminal"
-        case .unattributed: return "questionmark.circle"
-        }
-    }
-
-    private func tint(for kind: WorkbenchModel.AgentSession.Kind) -> Color {
+    private func tint(for kind: AgentSessions.Group.Kind) -> Color {
         switch kind {
         case .live: return .chipTeal
         default: return .secondary

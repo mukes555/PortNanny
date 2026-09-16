@@ -219,10 +219,12 @@ final class AgentCatalogTests: XCTestCase {
         XCTAssertTrue(dossier.sameProject)
         XCTAssertTrue(CLIWhois.text(for: dossier).contains("your working directory"))
 
+        // `doctor --agents` and the `agents` command are different reports.
         let report = DoctorAgents.report(table: t, path: "")
-        XCTAssertTrue(try keys(report).isSubset(of: Set(OutputSchemas.all["agents"]!.keys)))
+        XCTAssertTrue(try keys(report).isSubset(of: Set(OutputSchemas.all["doctor-agents"]!.keys)))
         XCTAssertTrue(try keys(try XCTUnwrap(report.agents.first)).isSubset(of: Set(OutputSchemas.agentStatus.keys)))
         XCTAssertNotNil(OutputSchemas.render("whois"))
-        XCTAssertTrue(OutputSchemas.render("agents")?.hasPrefix("doctor --agents --json") == true)
+        XCTAssertTrue(OutputSchemas.render("doctor-agents")?.hasPrefix("doctor --agents --json") == true)
+        XCTAssertTrue(OutputSchemas.render("agents")?.hasPrefix("agents --json") == true)
     }
 }

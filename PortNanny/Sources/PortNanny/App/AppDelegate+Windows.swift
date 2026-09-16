@@ -138,7 +138,7 @@ extension AppDelegate {
 
     /// The full-size window: table, projects, agent sessions, watchlist,
     /// history, and an inspector. One instance, remembered position.
-    func openWorkbench(section: WorkbenchView.Section = .ports, selection: String? = nil) {
+    func openWorkbench(section: WorkbenchView.Section = .agents, selection: String? = nil) {
         popover.performClose(nil)
         if workbenchWindow == nil {
             let view = WorkbenchView(portManager: portManager, initialSection: section, initialSelection: selection).environmentObject(self)

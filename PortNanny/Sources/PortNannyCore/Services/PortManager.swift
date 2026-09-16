@@ -131,17 +131,31 @@ public class PortManager: ObservableObject {
         }
     }
 
-    /// Clean = one glanceable line per port; Advanced = command path, chips,
-    /// CPU/age, tree expansion.
-    /// Raw values are what older versions stored; the case names match the UI.
-    public enum ViewDensity: String {
-        case simple = "clean"
-        case advanced
+    /// How the list is organised. Agents groups what is listening by the
+    /// session that started it, which is the question this app exists to
+    /// answer; Ports is the plain list by kind, for when the machine matters
+    /// more than who asked for it.
+    public enum ViewMode: String, CaseIterable {
+        case agents
+        case ports
+
+        public var label: String { self == .agents ? "Agents" : "Ports" }
+        public var icon: String { self == .agents ? "sparkles" : "list.bullet" }
     }
-    @Published public var viewDensity: ViewDensity = .simple {
+    @Published public var viewMode: ViewMode = .agents {
         didSet {
             guard !isRestoringPreferences else { return }
-            defaults.set(viewDensity.rawValue, forKey: DefaultsKey.viewDensity)
+            defaults.set(viewMode.rawValue, forKey: DefaultsKey.viewMode)
+        }
+    }
+
+    /// The command line, the chips, CPU and age, and the process tree. This
+    /// was the "Advanced" half of the old density setting; it is now a switch
+    /// that applies to either view.
+    @Published public var showsDetails = false {
+        didSet {
+            guard !isRestoringPreferences else { return }
+            defaults.set(showsDetails, forKey: DefaultsKey.showDetails)
         }
     }
 
@@ -328,9 +342,13 @@ public class PortManager: ObservableObject {
         if let stored = defaults.object(forKey: DefaultsKey.probeLocalServers) as? Bool {
             probeLocalServers = stored
         }
-        if let stored = defaults.string(forKey: DefaultsKey.viewDensity),
-           let density = ViewDensity(rawValue: stored) {
-            viewDensity = density
+        // The old Clean/Advanced density became a view and a switch: whoever
+        // had Advanced keeps the detail, and everybody starts in the view
+        // this app is for.
+        showsDetails = defaults.object(forKey: DefaultsKey.showDetails) as? Bool
+            ?? (defaults.string(forKey: DefaultsKey.viewDensity) == "advanced")
+        if let stored = defaults.string(forKey: DefaultsKey.viewMode), let mode = ViewMode(rawValue: stored) {
+            viewMode = mode
         }
         if let stored = defaults.object(forKey: DefaultsKey.showMenuBarCount) as? Bool {
             showMenuBarCount = stored
@@ -414,7 +432,8 @@ public class PortManager: ObservableObject {
         refreshInterval = 2.0
         hideSystemProcesses = true
         confirmBeforeKill = true
-        viewDensity = .simple
+        viewMode = .agents
+        showsDetails = false
         showMenuBarCount = true
         menuBarIcon = .mono
         popoverSize = .regular

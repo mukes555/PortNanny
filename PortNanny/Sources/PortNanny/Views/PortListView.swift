@@ -102,6 +102,14 @@ struct PortListView: View {
             .sorted { (Self.categoryRank[$0.key] ?? 999) < (Self.categoryRank[$1.key] ?? 999) }
     }
 
+    /// The same ports, grouped by the session that started them. Claims (a
+    /// lease with nothing listening yet) only make sense unfiltered: a search
+    /// or a category filter is about processes, and a claim has none.
+    var agentGroups: [AgentSessions.Group] {
+        let claims = filter == .all && paletteQuery.rowFilter.isEmpty ? ReservationStore.shared.recent() : []
+        return AgentSessions.groups(from: filteredPorts, leases: claims)
+    }
+
     var filteredTests: [TestProcessInfo] {
         let needle = paletteQuery.rowFilter
         if needle.isEmpty {
@@ -113,10 +121,14 @@ struct PortListView: View {
         }
     }
 
-    /// Row order as displayed, used for arrow-key navigation.
+    /// Row order as displayed, used for arrow-key navigation. It has to
+    /// follow whichever grouping is on screen, or the arrows jump about.
     var visibleIdsInOrder: [String] {
         if filter == .tests {
             return filteredTests.map(\.id)
+        }
+        if portManager.viewMode == .agents {
+            return agentGroups.flatMap { $0.ports.map(\.id) }
         }
         return groupedPorts.flatMap { $0.value.map(\.id) }
     }
@@ -239,6 +251,17 @@ struct PortListView: View {
                 loadingStateView
             } else if filteredPorts.isEmpty {
                 emptyStateView
+            } else if portManager.viewMode == .agents {
+                AgentListContent(
+                    groups: agentGroups,
+                    metrics: metrics,
+                    portManager: portManager,
+                    selectedId: $selectedId,
+                    expandedIds: $expandedIds,
+                    onSelectPort: { port in activeSheet = .portDetail(port) },
+                    onKillRequest: { port, force, killTree in requestKill(port, force: force, killTree: killTree) },
+                    onKillChild: { child in requestKillChild(child) }
+                )
             } else {
                 PortListContent(
                     groupedPorts: groupedPorts,
@@ -250,6 +273,19 @@ struct PortListView: View {
                     onKillRequest: { port, force, killTree in requestKill(port, force: force, killTree: killTree) },
                     onKillChild: { child in requestKillChild(child) }
                 )
+            }
+
+            // The Agents view with nothing to group by is a fair question:
+            // "is this thing working?". It is; nothing here came from an agent.
+            if portManager.viewMode == .agents, showsNoAgentHint {
+                Text("Nothing here was started by an AI agent. PortNanny labels servers from Claude Code, Codex, Cursor and friends on its own; for anything else, export PORTNANNY_OWNER=<name>.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
             }
 
             // A filter (system, UDP, ephemeral) must never look like missing data
@@ -265,6 +301,12 @@ struct PortListView: View {
                 .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
             }
         }
+    }
+
+    /// True when the Agents view has nothing but the catch-all group.
+    var showsNoAgentHint: Bool {
+        portManager.hasCompletedFirstScan && !filteredPorts.isEmpty
+            && agentGroups.allSatisfy { $0.kind == .unattributed }
     }
 
     var showWatchedSection: Bool {

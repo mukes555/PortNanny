@@ -4,7 +4,7 @@ import Foundation
 /// a test checks that what the encoders emit stays within it. Fields are only
 /// ever added within a schema version.
 public enum OutputSchemas {
-    public static let commands = ["list", "kill", "whois", "whoami", "wait", "history", "version", "doctor", "agents", "free-port", "reserve", "release", "reservations", "drift"]
+    public static let commands = ["list", "kill", "whois", "whoami", "wait", "history", "version", "doctor", "doctor-agents", "agents", "free-port", "reserve", "release", "reservations", "drift"]
 
     public static let expectedPort: [String: String] = [
         "port": "the port the project's files name", "source": "where: \".env PORT\", \"package.json dev\", \"vite.config.ts\"",
@@ -92,10 +92,15 @@ public enum OutputSchemas {
         ],
         "whoami": ["schema": "1", "detected": "whether an agent was identified", "owner": "AgentOwner or absent"],
         "wait": ["schema": "1", "port": "port", "free": "true when nothing listens", "waitedSeconds": "time waited", "exitCode": "0 free, 5 timeout"],
+        "agents": [
+            "schema": "1",
+            "sessions": "[{id, name, kind, session, ports, claims, memoryKB, isYou}] live sessions first, then ended, editor terminals, and the ports nobody claims",
+            "caller": "AgentOwner or absent: who PortNanny thinks is asking",
+        ],
         "history": ["<array>": "[{id, port, processName, timestamp, action, owner, killedBy}] newest first; kills only unless --all, which adds action Refused rows where killedBy names the agent that was refused"],
         "version": ["schema": "1", "version": "semver", "bundleIdentifier": "com.mukes555.PortNanny", "installSource": "Homebrew | Applications (DMG) | development build", "architecture": "arm64 | x86_64"],
         "doctor": ["<object>": "label -> value, one entry per diagnostic line"],
-        "agents": ["schema": "1", "caller": "AgentOwner of the caller, or absent", "agents": "[AgentStatus] the compatibility matrix against this machine (fields below)"],
+        "doctor-agents": ["schema": "1", "caller": "AgentOwner of the caller, or absent", "agents": "[AgentStatus] the compatibility matrix against this machine (fields below)"],
         "free-port": ["schema": "1", "port": "first free port that no one else has leased, absent when none", "preferred": "requested port", "range": "\"A-B\"", "exitCode": "0 found, 1 none"],
         "reserve": [
             "schema": "1", "action": "reserved | renewed | in-use | refused | failed", "port": "requested port",
@@ -120,12 +125,13 @@ public enum OutputSchemas {
         "reserve": [("Reservation", reservation)],
         "release": [("Reservation", reservation)],
         "reservations": [("Reservation", reservation)],
-        "agents": [("AgentStatus", agentStatus), ("AgentOwner", agentOwner)],
+        "doctor-agents": [("AgentStatus", agentStatus), ("AgentOwner", agentOwner)],
+        "agents": [("AgentOwner", agentOwner)],
     ]
 
     public static func render(_ command: String?) -> String? {
         guard let command, let fields = all[command] else { return nil }
-        var lines = ["\(command == "agents" ? "doctor --agents" : command) --json"]
+        var lines = ["\(command == "doctor-agents" ? "doctor --agents" : command) --json"]
         for key in fields.keys.sorted() {
             lines.append("  \(key.padding(toLength: 20, withPad: " ", startingAt: 0)) \(fields[key]!)")
         }

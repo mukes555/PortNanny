@@ -13,7 +13,7 @@ extension AppDelegate {
 
     func renderDemoReel(to path: String) {
         // A throwaway suite: the demo must not touch the real preferences
-        // (it sets the watchlist, density, and the tips flag).
+        // (it sets the watchlist, the view, and the tips flag).
         let demoDefaults = UserDefaults(suiteName: "com.mukes555.PortNanny.demo") ?? .standard
         demoDefaults.set(true, forKey: DefaultsKey.didDismissHotkeyTip)
         let manager = PortManager(defaults: demoDefaults, history: HistoryManager(defaults: demoDefaults), autoStart: false)

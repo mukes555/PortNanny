@@ -33,7 +33,7 @@ expects, and refuses an agent reaching for another agent's port.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/screenshot-dark.png">
-    <img src="assets/screenshot-light.png" width="580" alt="The PortNanny popover: watched ports on top, then every listening port with its type, process, exposure, connected clients, the agent session that started it, project, memory, and CPU trend">
+    <img src="assets/screenshot-light.png" width="580" alt="The PortNanny popover in its Agents view: watched ports on top, then a section per agent session with its servers, a port Codex has reserved and not started on yet, the sessions that have ended with a Clean up button, and everything nobody claims">
   </picture>
 </p>
 
@@ -55,11 +55,11 @@ Without Homebrew the CLI ships inside the app, at `PortNanny.app/Contents/Helper
 
 ## The popover
 
-<img src="assets/palette.png" width="330" align="right" alt="Typing kill 4400 offers to stop the server, and says its watch-mode supervisor goes with it">
+<img src="assets/palette.png" width="330" align="right" alt="Typing kill 4400 offers to stop the server, says its watch-mode supervisor goes with it, and shows the ended session it belongs to">
 
 <kbd>⌥</kbd><kbd>⌘</kbd><kbd>P</kbd> opens it from any app with the search field focused. Type a port, a process name, or a verb: `kill 3000`, `open 5173`, `watch 8080`, `free port`, or `>` for commands. Return runs it, and the bar above the list says exactly what will happen first.
 
-- **Rows carry what you need to decide.** A type tile, the port, the process, and chips for `exposed` on all interfaces, connected clients, and the agent session behind it (teal while it runs, grey once it ended). Advanced density adds the command, CPU with a trend line, the process tree, and chips for project, container, lease, and supervisor. Compact, Regular, or Large window, in Settings.
+- **Two views.** **Agents** groups what is listening by the session that started it: each agent with its servers, the ports it has reserved and not started on yet, the sessions that have ended (with one button to clean up after them), and everything nobody claims. **Ports** is the plain list by kind. Either view can show details in its rows: the command, CPU with a trend line, the process tree, and chips for project, container, lease, and supervisor.
 - **Kill is always visible.** Open in browser appears on web rows and Watch on any row, on hover or keyboard selection, and VoiceOver has both as row actions. <kbd>⌥</kbd>-click force kills, <kbd>⇧</kbd>-click takes the whole process tree. Right-click for the rest: open the project in your editor, reveal it in Finder or Terminal, copy the port, PID, or command, stop a Docker container.
 - **Supervisors are understood.** pm2, launchd, Docker, nodemon, `next dev`, `uvicorn --reload`: a plain kill would be undone, so PortNanny runs the supervisor's own stop command and tells you before it does.
 - **Watch and guard.** Watched ports sit above the list when you have not typed or filtered, with live status including "free", and notify you when they change. Add a guard to one and it auto-kills whatever takes that port, except a running agent's server, a protected process, or a system port. A guard that fires repeatedly stands itself down rather than fighting a supervisor.
@@ -110,6 +110,7 @@ portnanny free 3000 && npm run dev               # exit 0 when already free
 portnanny wait 3000 --timeout 30                 # block until the port is free
 portnanny whois 3000                             # who started it, and the evidence
 portnanny whoami                                 # how the guard sees the caller
+portnanny agents                                 # who is here, what they run and claim
 portnanny history --port 3000 [--all]            # kills, and refusals with --all
 portnanny free-port --prefer 3000                # first free port in 3000-3999
 portnanny exec --free-port -- npm run dev        # leased, attributed, PORT set
@@ -119,7 +120,7 @@ portnanny kill --orphaned                        # left behind by ended agent se
 portnanny doctor --agents                        # how every AI tool is recognised here
 ```
 
-Also `open`, `release`, `reservations`, `setup`, `agent-docs`, `mcp`, `schema`, `completions`, and `version`. Scripts get distinct exit codes: `0` done, `1` nothing listening, `3` refused, `5` still running after the wait, `6` a supervisor would undo the kill, and `portnanny help kill` lists the rest. There is a URL scheme too: `open "portnanny://kill/3000"` (add `?force=1` for SIGKILL; both ask first) or `portnanny://show`.
+Also `open`, `release`, `reservations`, `setup`, `agent-docs`, `mcp`, `schema`, `completions`, and `version`. Scripts get distinct exit codes: `0` done, `1` nothing listening, `3` refused, `4` failed or only partly killed, `5` still running after the wait, `6` a supervisor would undo the kill, and `portnanny help kill` lists the rest. There is a URL scheme too: `open "portnanny://kill/3000"` (add `?force=1` for SIGKILL; both ask first) or `portnanny://show`.
 
 ## Keyboard
 
@@ -139,7 +140,7 @@ In the popover.
 
 <img src="assets/menubar.png" width="210" align="right" alt="The quokka in the menu bar, next to the number of ports">
 
-Six panes: **General** (login item, refresh, confirmations, a switch per notification, watched ports), **Display** (size, density, which ports to hide, the menu bar icon and count), **Agents** (the AI tools found here, the unclaimed-server switch, per-tool setup, lease length), **Shortcuts**, **Protected** (names bulk kills never touch), and **About** (updates, debug info, reset).
+Six panes: **General** (login item, refresh, confirmations, a switch per notification, watched ports), **Display** (size, Agents or Ports, row details, which ports to hide, the menu bar icon and count), **Agents** (the AI tools found here, the unclaimed-server switch, per-tool setup, lease length), **Shortcuts**, **Protected** (names bulk kills never touch), and **About** (updates, debug info, reset).
 
 The menu bar shows the quokka and, if you want it, how many ports you own, leaving out system daemons and your editors. Pin the popover as a floating window when you want it to stay put.
 

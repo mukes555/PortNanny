@@ -11,6 +11,22 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+### Added
+- **An Agents view, and it is where PortNanny now opens.** What is listening
+  is grouped by the session that started it: each agent with its servers and
+  how much memory they hold, the ports an agent has reserved and not started
+  on yet, the sessions that have ended (with one button to clean up after
+  them), and everything nobody claims. When another agent has just been
+  refused one of a session's ports, the section says so.
+- The old Clean/Advanced density became two things: the view above (Agents
+  or Ports, the plain list by kind), and a "Show details in rows" switch
+  that works in either. An upgrade from Advanced keeps its detail.
+- **`portnanny agents`** answers the same question in a terminal, and in
+  `--json` for the agents themselves: every session here, the servers it is
+  running, the ports it has claimed, and which one is you. The rules file
+  PortNanny installs into projects now points agents at it.
+- The Workbench opens on Agents, and its session cards show claims too.
+
 <!-- next -->
 
 ## 2.3.0 (2026-09-16)

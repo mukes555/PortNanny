@@ -13,7 +13,7 @@ extension PortListView {
 
                 Spacer()
 
-                densityToggle
+                viewModeToggle
                 overflowMenu
                 settingsButton
             }
@@ -47,14 +47,14 @@ extension PortListView {
         BrandHeader.summary(
             portCount: portManager.visiblePorts.count,
             memory: portManager.totalPortsMemory,
-            liveSessions: WorkbenchModel.liveSessionCount(of: portManager.visiblePorts),
+            liveSessions: AgentSessions.liveSessionCount(of: portManager.visiblePorts),
             scanned: portManager.hasCompletedFirstScan
         )
     }
 
-    /// Modern segmented capsule to switch row density.
-    var densityToggle: some View {
-        DensityToggle(density: $portManager.viewDensity)
+    /// Modern segmented capsule: Agents or Ports.
+    var viewModeToggle: some View {
+        ViewModeToggle(mode: $portManager.viewMode)
     }
 
     /// Overflow menu: actions only (never settings, those live in ⚙︎).
