@@ -21,6 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     @Published var isPinned = false
     private var hotKey: GlobalHotKey?
     private var refusalWatcher: RefusalWatcher?
+    private var awayWatcher: AwayWatcher?
 
 
     @Published var hotkeyDisplay: String = GlobalHotKey.defaultDisplay
@@ -110,6 +111,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
 
         // A refusal the CLI issues to an agent becomes a notification here.
         refusalWatcher = RefusalWatcher(portManager: portManager) { [weak self] in self?.revealPorts() }
+
+        // Nothing is posted while the screen is locked or the display is
+        // asleep: macOS would queue it all for the moment of unlock. One
+        // summary follows instead.
+        awayWatcher = AwayWatcher { [weak self] isAway in
+            guard let self else { return }
+            self.portManager.notifications.isAway = isAway
+            if !isAway { self.portManager.flushHeldNotifications() }
+        }
 
         // A second copy someone opened asks this one to show itself.
         DistributedNotificationCenter.default().addObserver(

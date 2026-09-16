@@ -330,6 +330,10 @@ public class PortManager: ObservableObject {
     /// Recent guard kills per port; see `guardHasStruckOut`.
     public var guardStrikes: [Int: [Date]] = [:]
 
+    /// How many banners reach Notification Center, and when. See the type:
+    /// one flapping port used to be one banner per scan, with a sound each.
+    public let notifications = NotificationGate()
+
     /// Set when GitHub has a newer release; drives the "Download vX.Y.Z" menu item.
     @Published public var updateAvailableVersion: String?
 

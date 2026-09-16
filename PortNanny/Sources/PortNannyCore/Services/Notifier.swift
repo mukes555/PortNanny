@@ -60,7 +60,11 @@ public enum Notifier {
         post(UNNotificationRequest(identifier: "refusal-\(payload.port)", content: content, trigger: nil))
     }
 
-    public static func send(title: String, body: String, sound: Bool = true) {
+    /// `id` identifies what the banner is about (a port, a summary), so a
+    /// later one about the same thing replaces it in Notification Center.
+    /// Every banner used to carry a fresh UUID, so a port that changed forty
+    /// times left forty banners waiting for the person to come back.
+    public static func send(title: String, body: String, sound: Bool = true, id: String = UUID().uuidString) {
         guard isAvailable else { return }
 
         let content = UNMutableNotificationContent()
@@ -68,7 +72,7 @@ public enum Notifier {
         content.body = body
         content.sound = sound ? .default : nil
 
-        post(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+        post(UNNotificationRequest(identifier: id, content: content, trigger: nil))
     }
 
     /// Posts a notification, asking for permission first if that has never

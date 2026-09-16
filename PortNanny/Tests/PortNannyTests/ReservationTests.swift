@@ -106,7 +106,10 @@ final class ReservationTests: XCTestCase {
     }
 
     func testFreePortSkipsOtherPeoplesLeases() {
-        XCTAssertEqual(PortNannyCLI.firstFreePort(prefer: 3000, range: 3000...3005, listening: [3000, 3001]), 3002)
+        // `probe: false`: this is about the choosing logic. With the probe on,
+        // the answer depends on what happens to be listening on the machine
+        // running the tests, and a dev server on :3002 failed it.
+        XCTAssertEqual(PortNannyCLI.firstFreePort(prefer: 3000, range: 3000...3005, listening: [3000, 3001], probe: false), 3002)
     }
 
     func testReserveReleaseAndExecParse() {

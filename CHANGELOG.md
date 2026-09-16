@@ -11,6 +11,21 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+### Fixed
+- **Notifications could arrive in a flood.** A watched port that an agent
+  kept restarting produced a banner per change, each with its own sound and
+  its own entry in Notification Center. With the screen locked, macOS held
+  every one of them and delivered the lot at unlock. Now: one banner per
+  port per minute, at most three in half a minute before the rest become a
+  summary, one sound per burst rather than one each, and a new banner about
+  a port replaces the last one instead of stacking.
+- **Nothing is posted while the screen is locked or the display is asleep.**
+  The changes are counted instead, and one silent summary ("12 changes on
+  :3000, :5173 and 2 more") arrives when the screen comes back. The guard
+  still does its work while you are away; only the banners wait.
+- Refusal banners are rationed the same way: ten agents refused in a minute
+  is one story, not ten interruptions.
+
 <!-- next -->
 
 ## 2.4.1 (2026-09-16)
