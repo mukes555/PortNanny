@@ -1,41 +1,40 @@
 import Foundation
-import PortNannyCore
 
 /// What is listening, grouped by the session that started it: the question
 /// this app exists to answer. Plain functions, so both the popover's Agents
 /// view and the Workbench's Agents section render the same grouping and it
 /// can be tested without a window.
-enum AgentSessions {
+public enum AgentSessions {
 
-    struct Group: Identifiable {
+    public struct Group: Identifiable {
         /// Live sessions first, then the ones that ended (safe to clean up),
         /// then editor terminals, then whatever nobody claims.
-        enum Kind: Int {
+        public enum Kind: Int {
             case live = 0
             case ended = 1
             case editor = 2
             case unattributed = 3
         }
 
-        let id: String
-        let title: String
-        let subtitle: String
-        let kind: Kind
-        let owner: AgentOwner?
-        let ports: [PortInfo]
+        public let id: String
+        public let title: String
+        public let subtitle: String
+        public let kind: Kind
+        public let owner: AgentOwner?
+        public let ports: [PortInfo]
         /// Ports this session has leased with nothing listening on them yet:
         /// "I am about to start something here". Only the Agents view shows
         /// them, and only it can, because a claim has no process to list.
-        let claims: [Reservation]
+        public let claims: [Reservation]
 
-        var memoryKB: Int { ports.reduce(0) { $0 + $1.memorySizeKB } }
-        var isEmpty: Bool { ports.isEmpty && claims.isEmpty }
+        public var memoryKB: Int { ports.reduce(0) { $0 + $1.memorySizeKB } }
+        public var isEmpty: Bool { ports.isEmpty && claims.isEmpty }
     }
 
     /// One group per session. `leases` are matched to the session that holds
     /// them; a lease whose holder has nothing listening still gets a group,
     /// because "Codex has :3100 and has not started yet" is worth seeing.
-    static func groups(from ports: [PortInfo], leases: [Reservation] = [], user: String = Reservation.currentUser) -> [Group] {
+    public static func groups(from ports: [PortInfo], leases: [Reservation] = [], user: String = Reservation.currentUser) -> [Group] {
         var members: [String: [PortInfo]] = [:]
         var owners: [String: AgentOwner] = [:]
         for port in ports {
@@ -74,21 +73,21 @@ enum AgentSessions {
     }
 
     /// Ended sessions' servers: what "Clean up" stops.
-    static func orphaned(_ ports: [PortInfo]) -> [PortInfo] {
+    public static func orphaned(_ ports: [PortInfo]) -> [PortInfo] {
         ports.filter { $0.agentOwner?.sessionEnded == true }
     }
 
     /// The badge counts, without building the groups.
-    static func sessionCount(of ports: [PortInfo]) -> Int {
+    public static func sessionCount(of ports: [PortInfo]) -> Int {
         Set(ports.map { $0.agentOwner.map(sessionKey) ?? unattributedKey }).count
     }
 
     /// Live sessions only, for the header: an ended session is not running.
-    static func liveSessionCount(of ports: [PortInfo]) -> Int {
+    public static func liveSessionCount(of ports: [PortInfo]) -> Int {
         Set(ports.compactMap(\.agentOwner).filter(\.isLiveAgentSession).map(sessionKey)).count
     }
 
-    static let unattributedKey = "(unattributed)"
+    public static let unattributedKey = "(unattributed)"
 
     /// Every ended session of one tool shares a group: which of yesterday's
     /// sessions left a server behind is not a useful distinction.

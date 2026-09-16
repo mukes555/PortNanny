@@ -69,6 +69,40 @@ final class AgentSessionsTests: XCTestCase {
         XCTAssertEqual(AgentSessions.groups(from: ports)[0].memoryKB, 2048)
     }
 
+    // MARK: - `portnanny agents`
+
+    func testTheAgentsCommandParses() {
+        XCTAssertEqual(CLIArguments.parse(["agents"]), .success(.agents(json: false)))
+        XCTAssertEqual(CLIArguments.parse(["agents", "--json"]), .success(.agents(json: true)))
+        guard case .failure? = CLIArguments.parse(["agents", "--nope"]) else {
+            return XCTFail("an option the command does not know is an error, never ignored")
+        }
+    }
+
+    func testEachLineNamesTheSessionAndWhatItHolds() {
+        let lease = Reservation(port: 3100, owner: "Codex CLI", sessionKey: "s-42", reason: "api")
+        let ended = AgentOwner(name: "Cursor", sessionPid: 7, source: .environment, sessionEnded: true)
+        let groups = AgentSessions.groups(from: [port(3000, owner: claude), port(4000, pid: 2, owner: ended)],
+                                          leases: [lease])
+        let lines = CLIAgents.lines(for: groups, caller: claude)
+
+        XCTAssertEqual(lines.count, 3)
+        XCTAssertTrue(lines[0].contains("Claude Code"), lines[0])
+        XCTAssertTrue(lines[0].contains("running"), lines[0])
+        XCTAssertTrue(lines[0].contains(":3000"), lines[0])
+        XCTAssertTrue(lines[0].contains("← you"), "an agent reading this should find itself")
+        XCTAssertTrue(lines[1].contains("claims :3100"), lines[1])
+        XCTAssertFalse(lines[1].contains("← you"), "another agent's session is not yours")
+        XCTAssertTrue(lines[2].contains("ended"), lines[2])
+    }
+
+    func testALongListOfPortsIsCutRatherThanWrapped() {
+        let ports = (1...14).map { port(45000 + $0, pid: $0) }
+        let lines = CLIAgents.lines(for: AgentSessions.groups(from: ports), caller: nil)
+        XCTAssertTrue(lines[0].contains("+4 more"), lines[0])
+        XCTAssertFalse(lines[0].contains(":45014"), "the tail is counted, not printed")
+    }
+
     // MARK: - The setting the two views replaced
 
     func testAnUpgradeFromAdvancedKeepsItsDetail() throws {

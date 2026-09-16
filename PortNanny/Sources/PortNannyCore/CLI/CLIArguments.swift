@@ -24,6 +24,7 @@ public enum CLICommand: Equatable {
     case list(ListOptions)
     case kill(KillOptions)
     case whoami(json: Bool)
+    case agents(json: Bool)
     case wait(port: Int, timeout: TimeInterval, json: Bool)
     case open(port: Int)
     case history(HistoryOptions)
@@ -101,6 +102,9 @@ public enum CLIArguments {
         case "open": return parseOpen(rest)
         case "history": return parseHistory(rest)
         case "whoami": return parseWhoami(rest)
+        case "agents":
+            if rest.isEmpty { return .success(.agents(json: false)) }
+            return rest == ["--json"] ? .success(.agents(json: true)) : .failure(.unknownOption(rest[0], command: "agents"))
         case "whois": return parseWhois(rest)
         case "reserve": return parseReserve(rest)
         case "release": return parseRelease(rest)

@@ -3,7 +3,7 @@ import Foundation
 /// Static shell completions: the command set is small enough to spell out.
 /// `portnanny completions zsh > ~/.zfunc/_portnanny` (or let the cask do it).
 public enum CLICompletions {
-    public static let commands = ["list", "kill", "free", "wait", "open", "history", "whois", "whoami", "reserve", "release", "reservations", "exec", "drift", "free-port", "schema", "doctor", "setup", "agent-docs", "mcp", "completions", "version", "help"]
+    public static let commands = ["list", "kill", "free", "wait", "open", "history", "whois", "whoami", "agents", "reserve", "release", "reservations", "exec", "drift", "free-port", "schema", "doctor", "setup", "agent-docs", "mcp", "completions", "version", "help"]
 
     public static func script(for shell: String) -> String? {
         switch shell {

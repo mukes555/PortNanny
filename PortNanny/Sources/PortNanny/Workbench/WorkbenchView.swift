@@ -5,10 +5,11 @@ import SwiftUI
 /// sidebar of views (ports, projects, agent sessions, watchlist, history),
 /// the selected view in the middle, and an inspector for the chosen port.
 struct WorkbenchView: View {
+    /// Agents first: whose server it is comes before what kind of server it is.
     enum Section: String, CaseIterable, Identifiable {
+        case agents = "Agents"
         case ports = "Ports"
         case projects = "Projects"
-        case agents = "Agents"
         case watchlist = "Watchlist"
         case history = "History"
 
@@ -32,7 +33,7 @@ struct WorkbenchView: View {
     @State var selectedPortId: String?
     @State var searchText = ""
 
-    init(portManager: PortManager, initialSection: Section = .ports, initialSelection: String? = nil) {
+    init(portManager: PortManager, initialSection: Section = .agents, initialSelection: String? = nil) {
         _portManager = ObservedObject(wrappedValue: portManager)
         _section = State(initialValue: initialSection)
         _selectedPortId = State(initialValue: initialSelection)

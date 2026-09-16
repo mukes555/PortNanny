@@ -110,6 +110,7 @@ portnanny free 3000 && npm run dev               # exit 0 when already free
 portnanny wait 3000 --timeout 30                 # block until the port is free
 portnanny whois 3000                             # who started it, and the evidence
 portnanny whoami                                 # how the guard sees the caller
+portnanny agents                                 # who is here, what they run and claim
 portnanny history --port 3000 [--all]            # kills, and refusals with --all
 portnanny free-port --prefer 3000                # first free port in 3000-3999
 portnanny exec --free-port -- npm run dev        # leased, attributed, PORT set
@@ -119,7 +120,7 @@ portnanny kill --orphaned                        # left behind by ended agent se
 portnanny doctor --agents                        # how every AI tool is recognised here
 ```
 
-Also `open`, `release`, `reservations`, `setup`, `agent-docs`, `mcp`, `schema`, `completions`, and `version`. Scripts get distinct exit codes: `0` done, `1` nothing listening, `3` refused, `5` still running after the wait, `6` a supervisor would undo the kill, and `portnanny help kill` lists the rest. There is a URL scheme too: `open "portnanny://kill/3000"` (add `?force=1` for SIGKILL; both ask first) or `portnanny://show`.
+Also `open`, `release`, `reservations`, `setup`, `agent-docs`, `mcp`, `schema`, `completions`, and `version`. Scripts get distinct exit codes: `0` done, `1` nothing listening, `3` refused, `4` failed or only partly killed, `5` still running after the wait, `6` a supervisor would undo the kill, and `portnanny help kill` lists the rest. There is a URL scheme too: `open "portnanny://kill/3000"` (add `?force=1` for SIGKILL; both ask first) or `portnanny://show`.
 
 ## Keyboard
 

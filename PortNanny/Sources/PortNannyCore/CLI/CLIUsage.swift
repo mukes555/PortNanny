@@ -66,6 +66,16 @@ extension CLIArguments {
             and who stopped each process. --all adds the guard's refusals (action
             "Refused"; there, killedBy names the agent that was refused).
             """
+        case "agents": return """
+            portnanny agents [--json]
+
+            Who is on this machine and what they hold: every AI agent session
+            with the servers it is running and the ports it has reserved and
+            not started on yet, the sessions that have ended (whose servers
+            `portnanny kill --orphaned` clears), editor terminals, and the
+            ports nobody claims. The same grouping the app's Agents view
+            draws. Exit 0 either way; `--json` for the machine-readable form.
+            """
         case "whoami": return """
             portnanny whoami [--json]
 
@@ -117,7 +127,7 @@ extension CLIArguments {
             when the whole range is taken.
             """
         case "schema": return """
-            portnanny schema [list|kill|whois|whoami|wait|history|version|doctor|agents|free-port|reserve|release|reservations|drift]
+            portnanny schema [list|kill|whois|whoami|agents|wait|history|version|doctor|doctor-agents|free-port|reserve|release|reservations|drift]
 
             Prints the JSON contract for a command's --json output: every field and
             its meaning (`agents` is `doctor --agents`). Fields are only ever added,
@@ -185,6 +195,7 @@ extension CLIArguments {
       portnanny open <port>
       portnanny history [--json] [--port <port>] [--limit 20] [--all]
       portnanny whoami [--json]
+      portnanny agents [--json]          who is here, what they run, what they claim
       portnanny free-port [--prefer 3000] [--range 3000-3999] [--json]
       portnanny schema [command]         JSON output contracts
       portnanny doctor [--json] [--agents]

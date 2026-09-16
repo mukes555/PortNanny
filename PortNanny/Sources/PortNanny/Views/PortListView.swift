@@ -275,6 +275,19 @@ struct PortListView: View {
                 )
             }
 
+            // The Agents view with nothing to group by is a fair question:
+            // "is this thing working?". It is; nothing here came from an agent.
+            if portManager.viewMode == .agents, showsNoAgentHint {
+                Text("Nothing here was started by an AI agent. PortNanny labels servers from Claude Code, Codex, Cursor and friends on its own; for anything else, export PORTNANNY_OWNER=<name>.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+            }
+
             // A filter (system, UDP, ephemeral) must never look like missing data
             if portManager.hiddenPortsCount > 0 {
                 Button(action: { portManager.showEverything() }) {
@@ -288,6 +301,12 @@ struct PortListView: View {
                 .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
             }
         }
+    }
+
+    /// True when the Agents view has nothing but the catch-all group.
+    var showsNoAgentHint: Bool {
+        portManager.hasCompletedFirstScan && !filteredPorts.isEmpty
+            && agentGroups.allSatisfy { $0.kind == .unattributed }
     }
 
     var showWatchedSection: Bool {

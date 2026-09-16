@@ -21,6 +21,11 @@ release, rename it to the version and date.
 - The old Clean/Advanced density became two things: the view above (Agents
   or Ports, the plain list by kind), and a "Show details in rows" switch
   that works in either. An upgrade from Advanced keeps its detail.
+- **`portnanny agents`** answers the same question in a terminal, and in
+  `--json` for the agents themselves: every session here, the servers it is
+  running, the ports it has claimed, and which one is you. The rules file
+  PortNanny installs into projects now points agents at it.
+- The Workbench opens on Agents, and its session cards show claims too.
 
 <!-- next -->
 

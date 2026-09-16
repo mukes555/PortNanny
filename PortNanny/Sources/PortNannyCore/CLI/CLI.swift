@@ -22,6 +22,8 @@ public enum PortNannyCLI {
             return CLIKill.run(options)
         case .success(.whoami(let json)):
             return whoami(json: json)
+        case .success(.agents(let json)):
+            return CLIAgents.run(json: json)
         case .success(.wait(let port, let timeout, let json)):
             return wait(port: port, timeout: timeout, json: json)
         case .success(.open(let port)):
@@ -399,6 +401,10 @@ public enum PortNannyCLI {
       processes share a port.
     - `portnanny whois <port>` explains who started a server and why PortNanny thinks
       so (ancestry, markers, declaration), and what `kill` would do for you.
+    - `portnanny agents` is the room: every agent session here, the servers it is
+      running, the ports it has reserved and not started on yet, and the sessions
+      that have ended. Worth a look before you take a port someone else is about
+      to use.
     - `portnanny exec --free-port --prefer 3000 -- npm run dev` picks a free port,
       exports PORT, leases the port for the run, and attributes the server to you.
       `portnanny reserve <port> --for 10m` leases a port you are about to use by
