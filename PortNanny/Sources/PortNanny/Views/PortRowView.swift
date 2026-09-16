@@ -22,6 +22,7 @@ struct PortRowView: View {
     let metrics: RowMetrics
     let isProtected: Bool
     let isWatched: Bool
+    let isGuarded: Bool
     let isTerminating: Bool
     let isSelected: Bool
     /// Unobserved; the context menu, the star, and the sparkline need it.
@@ -53,6 +54,7 @@ struct PortRowView: View {
         var parts = ["Port \(port.port)", port.processName, port.memoryUsage]
         if let project = port.projectName { parts.append("project \(project)") }
         if let agent = port.agentOwner { parts.append(agent.sessionEnded ? "started by \(agent.name), session ended" : "owned by \(agent.name)") }
+        if isGuarded { parts.append("guarded") }
         if port.isExposed { parts.append("exposed on all interfaces") }
         if port.connections > 0 { parts.append("\(port.connections) clients connected") }
         if isTerminating { parts.append("shutting down") }
@@ -102,6 +104,7 @@ struct PortRowView: View {
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             // The hover-only verbs, reachable without a mouse.
             .accessibilityAction(named: isWatched ? "Stop watching" : "Watch") { manager.toggleWatch(port.port) }
+            .accessibilityAction(named: isGuarded ? "Remove guard" : "Guard") { GuardConfirm.toggle(port.port, in: manager) }
             .accessibilityAction(named: "Open in browser") { Browser.openLocalhost(port: port.port) }
             .contextMenu {
                 PortRowContextMenu(port: port, manager: manager, onSelect: onSelect, onKillRequest: onKillRequest)
@@ -187,11 +190,20 @@ struct PortRowView: View {
     /// needs, on the first line in every density.
     @ViewBuilder
     private var badges: some View {
+        // A lock, not a shield: the shield is the guard, and one symbol
+        // cannot mean both "bulk kills skip this" and "anything that takes
+        // this port is killed".
         if isProtected {
-            Image(systemName: "shield.fill")
+            Image(systemName: "lock.fill")
                 .font(.caption2)
                 .foregroundColor(.orange)
                 .help("Protected: skipped by bulk kill actions")
+        }
+        if isGuarded {
+            Image(systemName: "shield.fill")
+                .font(.caption2)
+                .foregroundColor(.orange)
+                .help("Guarded: anything that takes :\(port.port) is stopped, unless a live agent owns it")
         }
         if isWatched {
             Image(systemName: "star.fill")
@@ -304,6 +316,18 @@ struct PortRowView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(isWatched ? "Stop watching port \(port.port)" : "Watch port \(port.port)")
                 .help(isWatched ? "Stop watching" : "Watch: be told when it frees up or gets taken")
+                // The guard used to be reachable only by right-clicking, or
+                // from the watched section, which is not there until
+                // something is watched: the app's own feature, hidden.
+                Button(action: { GuardConfirm.toggle(port.port, in: manager) }) {
+                    Image(systemName: isGuarded ? "shield.fill" : "shield")
+                        .foregroundColor(isGuarded ? .orange : .secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isGuarded ? "Remove guard on port \(port.port)" : "Guard port \(port.port)")
+                .help(isGuarded
+                      ? "Guard active: anything that takes :\(port.port) gets stopped"
+                      : "Guard :\(port.port): stop anything that takes it (asks first)")
             }
             .opacity(showsExtraVerbs ? 1 : 0)
             .allowsHitTesting(showsExtraVerbs)

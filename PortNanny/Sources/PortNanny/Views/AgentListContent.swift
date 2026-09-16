@@ -69,6 +69,7 @@ struct AgentSectionView: View {
                     metrics: metrics,
                     isProtected: portManager.isProtectedProcessName(port.processName),
                     isWatched: portManager.isWatched(port.port),
+                    isGuarded: portManager.isGuarded(port.port),
                     isTerminating: portManager.terminatingPids.contains(port.pid),
                     isSelected: selectedId == port.id,
                     manager: portManager,
