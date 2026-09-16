@@ -23,6 +23,18 @@ public enum DoctorAgents {
         public let running: Int
         /// Where the executable was found on PATH, for CLI tools.
         public let installedAt: String?
+
+        public init(name: String, kind: String, recognisedBy: [String], session: String, provenance: String,
+                    tip: String?, running: Int, installedAt: String?) {
+            self.name = name
+            self.kind = kind
+            self.recognisedBy = recognisedBy
+            self.session = session
+            self.provenance = provenance
+            self.tip = tip
+            self.running = running
+            self.installedAt = installedAt
+        }
     }
 
     public static func run(json: Bool) -> Int32 {

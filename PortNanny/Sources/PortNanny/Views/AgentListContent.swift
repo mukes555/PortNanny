@@ -6,6 +6,9 @@ import SwiftUI
 /// the Ports view shows, so everything (verbs, tree, chips) behaves alike.
 struct AgentListContent: View {
     let groups: [AgentSessions.Group]
+    /// Off while searching or filtering: the tools are about the machine,
+    /// and the list is about the rows that matched.
+    var showsTools = true
     let metrics: RowMetrics
     @ObservedObject var portManager: PortManager
     @Binding var selectedId: String?
@@ -29,6 +32,11 @@ struct AgentListContent: View {
                             onKillRequest: onKillRequest,
                             onKillChild: onKillChild
                         )
+                    }
+                    // Sessions first (what is happening), then the tools they
+                    // come from (what could be).
+                    if showsTools {
+                        AgentToolsSection(tools: AgentTools.shared)
                     }
                 }
             }

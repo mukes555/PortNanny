@@ -103,9 +103,9 @@ final class AgentSessionsTests: XCTestCase {
         XCTAssertFalse(lines[0].contains(":45014"), "the tail is counted, not printed")
     }
 
-    // MARK: - The setting the two views replaced
+    // MARK: - The three tabs
 
-    func testAnUpgradeFromAdvancedKeepsItsDetail() throws {
+    func testEveryoneOpensInAgentsIncludingAnUpgrade() throws {
         let suite = "PortNannyViewMode.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { UserDefaults.discardSuite(named: suite, defaults: defaults) }
@@ -114,36 +114,45 @@ final class AgentSessionsTests: XCTestCase {
         let manager = PortManager(defaults: defaults, history: HistoryManager(defaults: defaults), autoStart: false)
         defer { manager.stopAutoRefresh() }
 
-        XCTAssertTrue(manager.showsDetails, "Advanced became the detail switch")
-        XCTAssertEqual(manager.viewMode, .agents, "and everyone starts in the view this app is for")
+        XCTAssertEqual(manager.viewMode, .agents, "the old density does not decide where an AI-first app opens")
+        XCTAssertFalse(manager.showsDetails, "the Agents view is an overview")
     }
 
-    func testAnUpgradeFromCleanStartsWithoutDetail() throws {
-        let suite = "PortNannyViewMode.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { UserDefaults.discardSuite(named: suite, defaults: defaults) }
-        defaults.set("clean", forKey: DefaultsKey.viewDensity)
-
-        let manager = PortManager(defaults: defaults, history: HistoryManager(defaults: defaults), autoStart: false)
-        defer { manager.stopAutoRefresh() }
-
-        XCTAssertFalse(manager.showsDetails)
-        XCTAssertEqual(manager.viewMode, .agents)
-    }
-
-    func testAChosenViewSurvivesARestart() throws {
+    func testAChosenTabSurvivesARestart() throws {
         let suite = "PortNannyViewMode.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { UserDefaults.discardSuite(named: suite, defaults: defaults) }
 
         let manager = PortManager(defaults: defaults, history: HistoryManager(defaults: defaults), autoStart: false)
-        manager.viewMode = .ports
-        manager.showsDetails = true
+        manager.viewMode = .advanced
         manager.stopAutoRefresh()
 
         let restarted = PortManager(defaults: defaults, history: HistoryManager(defaults: defaults), autoStart: false)
         defer { restarted.stopAutoRefresh() }
-        XCTAssertEqual(restarted.viewMode, .ports)
-        XCTAssertTrue(restarted.showsDetails)
+        XCTAssertEqual(restarted.viewMode, .advanced)
+        XCTAssertTrue(restarted.showsDetails, "Advanced is the tab with the detail")
+    }
+
+    func testSimpleReadsTheValueTheDensitySettingStored() {
+        XCTAssertEqual(PortManager.ViewMode(rawValue: "clean"), .simple)
+        XCTAssertEqual(PortManager.ViewMode(rawValue: "advanced"), .advanced)
+        XCTAssertEqual(PortManager.ViewMode.allCases.map(\.label), ["Agents", "Simple", "Advanced"])
+    }
+
+    // MARK: - The tools shown under the sessions
+
+    func testOnlyToolsThatAreHereAreShownRunningOnesFirst() {
+        func tool(_ name: String, running: Int, installed: Bool) -> DoctorAgents.Status {
+            DoctorAgents.Status(name: name, kind: "CLI", recognisedBy: [], session: "", provenance: "", tip: nil,
+                                running: running, installedAt: installed ? "/usr/local/bin/x" : nil)
+        }
+        let shown = AgentTools.present(in: [
+            tool("Aider", running: 0, installed: false),
+            tool("Gemini CLI", running: 0, installed: true),
+            tool("Codex CLI", running: 3, installed: true),
+            tool("Cursor", running: 1, installed: false),
+        ])
+        XCTAssertEqual(shown.map(\.name), ["Codex CLI", "Cursor", "Gemini CLI"],
+                       "running first, then installed and idle; a tool that is not here is not news")
     }
 }

@@ -31,6 +31,7 @@ extension AppDelegate {
                 // another's port. Written to the snapshot's own defaults.
                 portManager.history.addRefusal(port: 3000, processName: "node", owner: "Claude Code", refused: "Codex CLI")
                 // And an agent that has claimed a port before starting on it.
+                AgentTools.shared.showForDemo(DemoData.tools)
                 let claim = DemoData.claim
                 _ = ReservationStore.shared.release(port: claim.port, by: nil, force: true)
                 try? ReservationStore.shared.reserve(claim, by: claim.holder)
@@ -79,12 +80,10 @@ extension AppDelegate {
         if let watchList = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_SNAPSHOT_WATCH"] {
             portManager.watchedPorts = Set(watchList.split(separator: ",").compactMap { Int($0) })
         }
-        if let mode = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_SNAPSHOT_MODE"],
-           let value = PortManager.ViewMode(rawValue: mode) {
+        // agents, simple or advanced (the stored "clean" works too).
+        if let mode = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_SNAPSHOT_MODE"]?.lowercased(),
+           let value = PortManager.ViewMode(rawValue: mode) ?? PortManager.ViewMode.allCases.first(where: { $0.label.lowercased() == mode }) {
             portManager.viewMode = value
-        }
-        if let details = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_SNAPSHOT_DETAILS"] {
-            portManager.showsDetails = details == "1"
         }
 
         let view: NSView

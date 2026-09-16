@@ -91,8 +91,7 @@ screen-recording permission needed. CI uses the first one as a smoke test.
 | `PORTNANNY_DEFAULTS_SUITE=<suite>` | Preferences and history go to that defaults domain, so renders and scenario runs never touch your own settings |
 | `PORTNANNY_SNAPSHOT_PANE=general\|display\|agents\|shortcuts\|protected\|about` | Which Settings pane to render |
 | `PORTNANNY_SNAPSHOT_TEXTSIZE=large` | Render at an accessibility text size to check that rows reflow |
-| `PORTNANNY_SNAPSHOT_MODE=agents\|ports` | Which view to render |
-| `PORTNANNY_SNAPSHOT_DETAILS=1` | Turn row details on |
+| `PORTNANNY_SNAPSHOT_MODE=agents\|simple\|advanced` | Which tab to render |
 | `PORTNANNY_SNAPSHOT_WATCH=3000,9999` | Seed watched ports |
 | `PORTNANNY_SNAPSHOT_APPEARANCE=light\|dark` | Force appearance |
 | `PORTNANNY_SHOW_ON_LAUNCH=1` | Auto-open the popover on launch |
@@ -108,7 +107,7 @@ folders, paths, and user name into the repository, and the images are public.
 
 ```bash
 # main-view screenshot
-PORTNANNY_SNAPSHOT_DATA=demo PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=../assets/screenshot-dark.png PORTNANNY_SNAPSHOT_APPEARANCE=dark PORTNANNY_SNAPSHOT_MODE=ports PORTNANNY_SNAPSHOT_DETAILS=1 PORTNANNY_SNAPSHOT_WATCH=3000 .build/debug/PortNanny
+PORTNANNY_SNAPSHOT_DATA=demo PORTNANNY_DEFAULTS_SUITE=com.mukes555.PortNanny.readme PORTNANNY_MASCOT_DIR=assets/mascot PORTNANNY_SNAPSHOT=../assets/screenshot-dark.png PORTNANNY_SNAPSHOT_APPEARANCE=dark PORTNANNY_SNAPSHOT_MODE=agents PORTNANNY_SNAPSHOT_WATCH=3000 .build/debug/PortNanny
 # (the same with APPEARANCE=light for screenshot-light.png; PORTNANNY_SNAPSHOT_SEARCH="kill 4400" for palette.png)
 # the Workbench: a real window, photographed (needs Screen Recording permission
 # for the debug binary; the offscreen render leaves the sidebar column blank)

@@ -25,6 +25,18 @@ enum DemoData {
     static let claim = Reservation(port: 3100, owner: "Codex CLI", sessionKey: "s-42",
                                    reason: "building the checkout page", ttl: 20 * 60)
 
+    /// The AI tools the Agents view lists at the bottom.
+    static let tools: [DoctorAgents.Status] = [
+        DoctorAgents.Status(name: "Claude Code", kind: "CLI", recognisedBy: [], session: "one per window", provenance: "",
+                            tip: nil, running: 2, installedAt: "/usr/local/bin/claude"),
+        DoctorAgents.Status(name: "Codex CLI", kind: "CLI", recognisedBy: [], session: "one per run", provenance: "",
+                            tip: nil, running: 1, installedAt: "/usr/local/bin/codex"),
+        DoctorAgents.Status(name: "Cursor", kind: "editor", recognisedBy: [], session: "one per window", provenance: "",
+                            tip: nil, running: 1, installedAt: nil),
+        DoctorAgents.Status(name: "Gemini CLI", kind: "CLI", recognisedBy: [], session: "one per run", provenance: "",
+                            tip: nil, running: 0, installedAt: "/usr/local/bin/gemini"),
+    ]
+
     /// The reel kills :3000 halfway through, so it can be left out.
     static func ports(includePort3000: Bool) -> [PortInfo] {
         var ports: [PortInfo] = [

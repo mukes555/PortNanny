@@ -1,9 +1,9 @@
 import PortNannyCore
 import SwiftUI
 
-/// Agents ⟷ Ports: a pill with a sliding selection, the one place the list's
-/// organisation is chosen. (It replaced a Simple/Advanced density toggle;
-/// the detail it used to carry is now a switch in Settings.)
+/// Agents ⟷ Simple ⟷ Advanced: a pill with a sliding selection over the
+/// list. Agents is the grouping by session; the other two are the plain list
+/// with less or more in each row.
 struct ViewModeToggle: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var mode: PortManager.ViewMode
@@ -22,7 +22,7 @@ struct ViewModeToggle: View {
         .overlay(
             Capsule().stroke(Color(nsColor: .separatorColor), lineWidth: 1)
         )
-        .help("Agents groups what is listening by the session that started it. Ports lists everything by kind.")
+        .help("Agents groups what is listening by the session that started it. Simple lists every port by kind; Advanced adds the command, chips, CPU, and process tree.")
     }
 
     private func segment(_ value: PortManager.ViewMode) -> some View {
@@ -35,11 +35,15 @@ struct ViewModeToggle: View {
             HStack(spacing: 4) {
                 Image(systemName: value.icon)
                     .font(.system(size: 10, weight: .medium))
+                // Three labels share the header with the brand; one of them
+                // wrapped to "Advance / d" before these two lines.
                 Text(value.label)
                     .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundColor(selected ? .primary : .secondary)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(
                 ZStack {
