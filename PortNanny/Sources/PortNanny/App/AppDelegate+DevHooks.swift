@@ -147,7 +147,14 @@ extension AppDelegate {
             // PORTNANNY_SNAPSHOT_SEARCH seeds the search field, so the palette
             // bar ("kill 3000", "> ...") can be rendered.
             let search = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_SNAPSHOT_SEARCH"] ?? ""
-            view = NSHostingView(rootView: PortListView(portManager: portManager, initialSearchText: search).environmentObject(self).dynamicTypeSize(textSize))
+            // PORTNANNY_SNAPSHOT_SELECT=<port> selects a row, which is the
+            // only way an offscreen render shows the verbs that live on
+            // hover or selection.
+            let selected = Foundation.ProcessInfo.processInfo.environment["PORTNANNY_SNAPSHOT_SELECT"]
+                .flatMap(Int.init)
+                .flatMap { number in portManager.activePorts.first { $0.port == number }?.id }
+            view = NSHostingView(rootView: PortListView(portManager: portManager, initialSearchText: search, initialSelectedId: selected)
+                .environmentObject(self).dynamicTypeSize(textSize))
         }
 
         let size = view.fittingSize == .zero ? NSSize(width: 500, height: 600) : view.fittingSize

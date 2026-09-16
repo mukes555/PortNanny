@@ -85,7 +85,12 @@ struct WorkbenchPortsTable: View {
                 HStack(spacing: 6) {
                     Text(port.processName).fontWeight(.medium)
                     if portManager.isProtectedProcessName(port.processName) {
+                        Image(systemName: "lock.fill").font(.caption2).foregroundColor(.orange)
+                            .help("Protected: skipped by bulk kill actions")
+                    }
+                    if portManager.isGuarded(port.port) {
                         Image(systemName: "shield.fill").font(.caption2).foregroundColor(.orange)
+                            .help("Guarded: anything that takes this port is stopped")
                     }
                     if port.isExposed {
                         Chip(icon: "wifi.exclamationmark", text: "exposed", tint: .chipOrange)
