@@ -9,6 +9,9 @@ They are manual. They need a machine with real processes on it, and one of
 them needs Docker, so CI does not run them. Run them after a change to
 scanning, attribution, the guard, the supervisors, or the MCP server.
 
+The debug binary is the one to use: it honours the throwaway preference
+domain the scripts set, so nothing lands in the real one.
+
 ```bash
 cd PortNanny
 swift build
@@ -22,8 +25,18 @@ PN=$PWD/.build/debug/portnanny python3 Tests/e2e/mcp.py
 
 ## Safety
 
-These scripts start real servers and kill real processes, so they follow two
-rules, both learned by breaking them:
+These scripts start real servers and kill real processes, so they follow
+three rules, all learned by breaking them:
+
+- **Each run gets its own preference domain.** `lib.sh` exports
+  `PORTNANNY_DEFAULTS_SUITE` and deletes it afterwards. These suites provoke
+  refusals on purpose, and a refusal the CLI records is broadcast to the
+  running app, which turns it into a banner with a sound. Run against the
+  real domain, a day of testing arrives as a pile of notifications at the
+  next unlock, and the leases and History rows are the person's to clean up.
+  A build that ignores the override (a release build: it is debug-only)
+  stops the run rather than writing to the real store. To do it anyway, with
+  your eyes open, set `PORTNANNY_E2E_ALLOW_REAL_STORE=1`.
 
 - **Only ever signal a pid recorded at spawn time.** Never a pattern. A
   `pkill -f "http.server 450"` once matched a person's own `http.server 4500`

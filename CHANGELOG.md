@@ -25,6 +25,13 @@ release, rename it to the version and date.
   still does its work while you are away; only the banners wait.
 - Refusal banners are rationed the same way: ten agents refused in a minute
   is one story, not ten interruptions.
+- `portnanny version --json` reports `defaultsDomain`, the preference domain
+  that build reads. The end-to-end suites use it to check they are isolated
+  before they run: they provoke refusals on purpose, and against the real
+  domain every one of them became a banner on the person's screen, plus
+  leases and History rows they had to clean up. Each run now gets its own
+  domain, and the guard suite stops flipping the real "refuse unclaimed
+  servers" setting.
 
 <!-- next -->
 

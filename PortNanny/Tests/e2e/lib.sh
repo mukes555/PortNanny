@@ -6,6 +6,24 @@
 #   - every listener binds 127.0.0.1 in 45001-45019
 setopt NO_HUP NO_CHECK_JOBS
 PN="${PN:?set PN to the portnanny binary under test}"
+
+# These suites provoke refusals on purpose, and a refusal the CLI records is
+# broadcast to the running app, which turns it into a banner with a sound.
+# Run against the person's real preference domain, they get one alert per
+# refusal, for every run: a day of testing arrived as a pile of notifications
+# at the next unlock. So each run gets its own throwaway domain, and a build
+# that ignores the override (a release build, where it is debug-only) stops
+# here rather than writing into the real store.
+E2E_SUITE="${PORTNANNY_DEFAULTS_SUITE:-PortNannyE2E.$$}"
+export PORTNANNY_DEFAULTS_SUITE="$E2E_SUITE"
+E2E_DOMAIN="$("$PN" version --json 2>/dev/null | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin).get("defaultsDomain",""))' 2>/dev/null)"
+if [ "$E2E_DOMAIN" != "$E2E_SUITE" ] && [ "${PORTNANNY_E2E_ALLOW_REAL_STORE:-0}" != "1" ]; then
+  print -r -- "This build writes to ${E2E_DOMAIN:-the real preference domain}, not the throwaway one these suites asked for."
+  print -r -- "Leases, history and refusal banners would land on the person using this Mac."
+  print -r -- "Run them against .build/debug/portnanny, or set PORTNANNY_E2E_ALLOW_REAL_STORE=1 to accept that."
+  exit 2
+fi
+
 # Where the scripts park command output they need to grep.
 S_OUT="${S_OUT:-$(mktemp -d "${TMPDIR:-/tmp}/portnanny-e2e.XXXXXX")}"
 PASS=0; FAIL=0
@@ -21,6 +39,11 @@ cleanup() {
   local pid
   for pid in $STARTED; do kill -9 "$pid" 2>/dev/null; done
   STARTED=()
+  # The throwaway domain goes with the run that made it.
+  if [ "$E2E_DOMAIN" = "$E2E_SUITE" ]; then
+    defaults delete "$E2E_SUITE" 2>/dev/null
+    rm -f "$HOME/Library/Preferences/$E2E_SUITE.plist"
+  fi
 }
 trap cleanup EXIT INT TERM
 

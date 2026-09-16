@@ -98,7 +98,7 @@ public enum OutputSchemas {
             "caller": "AgentOwner or absent: who PortNanny thinks is asking",
         ],
         "history": ["<array>": "[{id, port, processName, timestamp, action, owner, killedBy}] newest first; kills only unless --all, which adds action Refused rows where killedBy names the agent that was refused"],
-        "version": ["schema": "1", "version": "semver", "bundleIdentifier": "com.mukes555.PortNanny", "installSource": "Homebrew | Applications (DMG) | development build", "architecture": "arm64 | x86_64"],
+        "version": ["schema": "1", "version": "semver", "bundleIdentifier": "com.mukes555.PortNanny", "installSource": "Homebrew | Applications (DMG) | development build", "architecture": "arm64 | x86_64", "defaultsDomain": "the preference domain this build reads; a debug build honours PORTNANNY_DEFAULTS_SUITE, a release build does not"],
         "doctor": ["<object>": "label -> value, one entry per diagnostic line"],
         "doctor-agents": ["schema": "1", "caller": "AgentOwner of the caller, or absent", "agents": "[AgentStatus] the compatibility matrix against this machine (fields below)"],
         "free-port": ["schema": "1", "port": "first free port that no one else has leased, absent when none", "preferred": "requested port", "range": "\"A-B\"", "exitCode": "0 found, 1 none"],

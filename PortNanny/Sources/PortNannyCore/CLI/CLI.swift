@@ -129,6 +129,11 @@ public enum PortNannyCLI {
         let bundleIdentifier = "com.mukes555.PortNanny"
         let installSource: String
         let architecture: String
+        /// Which preference domain this build reads and writes. A test
+        /// harness can compare it against the throwaway domain it asked for
+        /// and stop before it writes into the person's real store, and posts
+        /// real refusal banners at them.
+        let defaultsDomain = HistoryManager.appSuiteName
     }
 
     private static func version(json: Bool) -> Int32 {
