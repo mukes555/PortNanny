@@ -11,6 +11,13 @@ release, rename it to the version and date.
 
 ## [Unreleased]
 
+<!-- next -->
+
+## 2.4.2 (2026-09-16)
+
+Notifications that know when to keep quiet, and a test harness that stops
+writing to the store of whoever is using the Mac.
+
 ### Fixed
 - **Notifications could arrive in a flood.** A watched port that an agent
   kept restarting produced a banner per change, each with its own sound and
@@ -32,8 +39,6 @@ release, rename it to the version and date.
   leases and History rows they had to clean up. Each run now gets its own
   domain, and the guard suite stops flipping the real "refuse unclaimed
   servers" setting.
-
-<!-- next -->
 
 ## 2.4.1 (2026-09-16)
 
